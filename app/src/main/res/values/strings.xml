@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">CID Quest</string>
+    <string name="coming_soon">COMING SOON</string>
+    <string name="tagline">Find your way through the maze.</string>
+</resources>
