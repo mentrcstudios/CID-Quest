@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,18 +53,20 @@ import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.TextPrimary
 import com.mentricstudios.cidquest.ui.theme.TextSecondary
+import com.mentricstudios.cidquest.util.SoundManager
 import kotlinx.coroutines.delay
 
 private val LOADING_MESSAGES = listOf(
-    "Carving out corridors…",
-    "Hiding a few dead ends…",
-    "Polishing the walls…",
-    "Placing the exit…",
-    "Almost ready…"
+    "Carving corridors (badly)…",
+    "Hiding a few dead ends, teehee…",
+    "Bribing the guards to look busy…",
+    "Making sure the exit isn't a trap…",
+    "Almost ready, hang tight…"
 )
 
 @Composable
 fun LoadingScreen(onFinished: () -> Unit) {
+    val context = LocalContext.current
     var progress by remember { mutableFloatStateOf(0f) }
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
@@ -90,6 +93,7 @@ fun LoadingScreen(onFinished: () -> Unit) {
     )
 
     LaunchedEffect(Unit) {
+        SoundManager.playLoadingMusic(context)
         // Simulated loading — replace with real asset/init loading later
         for (step in 1..LOADING_MESSAGES.size) {
             messageIndex = step - 1

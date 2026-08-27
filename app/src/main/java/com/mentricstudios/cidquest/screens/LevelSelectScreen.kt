@@ -33,7 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -70,14 +69,12 @@ import kotlinx.coroutines.delay
 private data class LevelTileState(
     val levelNumber: Int,
     val playable: Boolean,
-    val unlocked: Boolean,
-    val earnedStars: Int
+    val unlocked: Boolean
 )
 
 @Composable
 fun LevelSelectScreen(
     categoryName: String,
-    starCount: Int = 3,
     totalLevels: Int = 30,
     onLevelClick: (Int) -> Unit = {},
     onBack: () -> Unit
@@ -117,9 +114,8 @@ fun LevelSelectScreen(
         (1..totalLevels).map { levelNumber ->
             val playable = MazeLevels.isPlayable(categoryName, levelNumber)
             val unlocked = playable &&
-                (levelNumber == 1 || GameProgress.bestStars(context, categoryName, levelNumber - 1) > 0)
-            val earnedStars = if (playable) GameProgress.bestStars(context, categoryName, levelNumber) else 0
-            LevelTileState(levelNumber, playable, unlocked, earnedStars)
+                (levelNumber == 1 || GameProgress.isCompleted(context, categoryName, levelNumber - 1))
+            LevelTileState(levelNumber, playable, unlocked)
         }
     }
 
@@ -170,16 +166,9 @@ fun LevelSelectScreen(
                     fontWeight = FontWeight.Black,
                     letterSpacing = 1.sp
                 )
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(AccentAmber.copy(alpha = 0.15f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(13.dp))
-                    Text(text = " $starCount", color = AccentAmber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
+                // Spacer to balance the back button on the left, keeping the
+                // title centered now that the star chip is gone.
+                Box(modifier = Modifier.size(44.dp))
             }
 
             LazyVerticalGrid(
@@ -193,7 +182,6 @@ fun LevelSelectScreen(
                     LevelTile(
                         number = state.levelNumber,
                         unlocked = state.unlocked,
-                        earnedStars = state.earnedStars,
                         lockPulse = lockPulse,
                         alreadyAppeared = state.levelNumber in seenLevelTiles,
                         onAppeared = { seenLevelTiles.add(state.levelNumber) },
@@ -247,7 +235,7 @@ private fun ComingSoonOverlay(onDismiss: () -> Unit) {
                 Text("COMING SOON", color = AccentAmber, fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Maze gameplay for this level is still in development — check back in the full release!",
+                    "Still drawing the walls on this one — patience, detective.",
                     color = TextSecondary,
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center
@@ -261,7 +249,6 @@ private fun ComingSoonOverlay(onDismiss: () -> Unit) {
 private fun LevelTile(
     number: Int,
     unlocked: Boolean,
-    earnedStars: Int = 0,
     lockPulse: androidx.compose.runtime.State<Float>,
     alreadyAppeared: Boolean = false,
     onAppeared: () -> Unit = {},
@@ -311,16 +298,7 @@ private fun LevelTile(
         contentAlignment = Alignment.Center
     ) {
         if (unlocked) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "$number", color = AccentGold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                if (earnedStars > 0) {
-                    Row {
-                        repeat(earnedStars) {
-                            Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(9.dp))
-                        }
-                    }
-                }
-            }
+            Text(text = "$number", color = AccentGold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         } else {
             Icon(
                 imageVector = Icons.Filled.Lock,

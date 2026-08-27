@@ -33,6 +33,8 @@ object SoundManager {
     private var clickSoundId: Int = 0
     private var rewardSoundId: Int = 0
     private var wrongSoundId: Int = 0
+    private var gameOverSoundId: Int = 0
+    private val spottedSoundIds = IntArray(3)
     private var poolInitialized = false
 
     private val loadedSoundIds = mutableSetOf<Int>()
@@ -84,6 +86,10 @@ object SoundManager {
         clickSoundId = pool.load(appContext, R.raw.sfx_click, 1)
         rewardSoundId = pool.load(appContext, R.raw.sfx_reward, 1)
         wrongSoundId = pool.load(appContext, R.raw.sfx_wrong, 1)
+        gameOverSoundId = pool.load(appContext, R.raw.sfx_game_over, 1)
+        spottedSoundIds[0] = pool.load(appContext, R.raw.sfx_spotted_1, 1)
+        spottedSoundIds[1] = pool.load(appContext, R.raw.sfx_spotted_2, 1)
+        spottedSoundIds[2] = pool.load(appContext, R.raw.sfx_spotted_3, 1)
         poolInitialized = true
     }
 
@@ -120,6 +126,37 @@ object SoundManager {
         if (SettingsPrefs.isVibrationEnabled(context)) {
             strongVibrate(context)
         }
+    }
+
+    /** Short musical stinger that follows [playWrong] once the Caught overlay appears. */
+    fun playGameOver(context: Context) {
+        if (!SettingsPrefs.isSoundEnabled(context)) return
+        ensurePool(context)
+        playWhenReady(gameOverSoundId, 1f)
+    }
+
+    /** Short reaction cue for a guard suddenly coming into close range — one
+     * of 3 recorded variants, chosen at random so it doesn't feel identical
+     * every time. */
+    fun playSpotted(context: Context) {
+        if (!SettingsPrefs.isSoundEnabled(context)) return
+        ensurePool(context)
+        playWhenReady(spottedSoundIds[kotlin.random.Random.nextInt(spottedSoundIds.size)], 0.85f)
+    }
+
+    private var loadingPlayer: MediaPlayer? = null
+
+    /** One-shot jingle for the Loading screen — not looped, plays once per app launch. */
+    fun playLoadingMusic(context: Context) {
+        if (!SettingsPrefs.isSoundEnabled(context)) return
+        loadingPlayer?.release()
+        loadingPlayer = MediaPlayer.create(context.applicationContext, R.raw.music_loading)
+        loadingPlayer?.setVolume(0.5f, 0.5f)
+        loadingPlayer?.setOnCompletionListener {
+            it.release()
+            loadingPlayer = null
+        }
+        loadingPlayer?.start()
     }
 
     private fun strongVibrate(context: Context) {

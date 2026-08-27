@@ -49,9 +49,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -62,6 +64,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,8 +87,8 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SentimentVeryDissatisfied
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
+import com.mentricstudios.cidquest.R
 import com.mentricstudios.cidquest.ads.AdFrequency
 import com.mentricstudios.cidquest.ads.AdsManager
 import com.mentricstudios.cidquest.game.CellPos
@@ -94,8 +97,6 @@ import com.mentricstudios.cidquest.game.MazeGenerator
 import com.mentricstudios.cidquest.game.MazeGrid
 import com.mentricstudios.cidquest.game.MazeLevel
 import com.mentricstudios.cidquest.game.MazeLevels
-import com.mentricstudios.cidquest.game.SkinType
-import com.mentricstudios.cidquest.game.SkinsCatalog
 import com.mentricstudios.cidquest.ui.theme.AccentAmber
 import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
@@ -105,10 +106,10 @@ import com.mentricstudios.cidquest.ui.theme.CategoryEnemies
 import com.mentricstudios.cidquest.ui.theme.EnemyColor
 import com.mentricstudios.cidquest.ui.theme.TextPrimary
 import com.mentricstudios.cidquest.ui.theme.TextSecondary
+import com.mentricstudios.cidquest.util.CharacterPhoto
 import com.mentricstudios.cidquest.util.GameProgress
 import com.mentricstudios.cidquest.util.OnboardingPrefs
 import com.mentricstudios.cidquest.util.SettingsPrefs
-import com.mentricstudios.cidquest.util.SkinPrefs
 import com.mentricstudios.cidquest.util.SoundManager
 import com.mentricstudios.cidquest.util.bounceClick
 import kotlinx.coroutines.coroutineScope
@@ -116,6 +117,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sign
 import kotlin.math.sin
 import kotlin.random.Random
@@ -202,12 +204,17 @@ fun MazeGameScreen(
     val haptics = LocalHapticFeedback.current
     val vibrationEnabled = remember { SettingsPrefs.isVibrationEnabled(context) }
     val onScreenControlsEnabled = remember { SettingsPrefs.isOnScreenControlsEnabled(context) }
-    val playerSkinColor = remember {
-        SkinsCatalog.colorFor(SkinType.PLAYER, SkinPrefs.selectedSkinId(context, SkinType.PLAYER))
-    }
-    val enemySkinColor = remember {
-        SkinsCatalog.colorFor(SkinType.ENEMY, SkinPrefs.selectedSkinId(context, SkinType.ENEMY))
-    }
+    // No more purchasable skins — the hero/guard tokens always render in
+    // these two fixed colors.
+    val playerSkinColor = AccentGold
+    val enemySkinColor = EnemyColor
+
+    // Character photos: the player's own picked photo (or the bundled
+    // default) and the three fixed guard photos — decoded, cropped, and
+    // circle-masked once per process and cached in CharacterPhoto, not
+    // redone on every level transition.
+    val playerPhoto = remember { CharacterPhoto.playerAvatar(context) }
+    val enemyPhotos = remember { CharacterPhoto.enemyAvatars(context) }
     fun vibrate(type: HapticFeedbackType) {
         if (vibrationEnabled) haptics.performHapticFeedback(type)
     }
@@ -509,10 +516,41 @@ fun MazeGameScreen(
                 // haptics.performHapticFeedback pulse below is skipped here
                 // to avoid stacking two vibrations on the same catch.
                 SoundManager.playWrong(context)
+                SoundManager.playGameOver(context)
                 // Once caught, this loop's job is done for this life — stop
                 // polling so it can't flag another hit while the overlay is
                 // showing and resetLevel() is about to cancel/relaunch us.
                 return@LaunchedEffect
+            }
+        }
+    }
+
+    // "Spotted" proximity cue — a lighter-weight warning than the catch
+    // check above: plays a short reaction sound the first moment a guard
+    // comes within a wider radius, giving an audio heads-up before it's
+    // actually a catch. Edge-triggered per guard (fires once on approach,
+    // not for as long as the guard lingers close) with a shared cooldown so
+    // several guards near at once don't spam the sound.
+    LaunchedEffect(level, resetTick) {
+        if (level.enemies.isEmpty()) return@LaunchedEffect
+        delay(350)
+        val wasNear = BooleanArray(level.enemies.size)
+        var lastPlayedAt = 0L
+        val proximityRadius = 1.8f
+        val cooldownMillis = 1600L
+        while (true) {
+            delay(80)
+            if (isPaused || isWon || isCaught || showTutorial || playerEntrance.value < 1f) continue
+            val now = System.currentTimeMillis()
+            for (idx in level.enemies.indices) {
+                val dRow = abs(animRow.value - enemyAnimRows[idx].value)
+                val dCol = abs(animCol.value - enemyAnimCols[idx].value)
+                val near = dRow < proximityRadius && dCol < proximityRadius
+                if (near && !wasNear[idx] && now - lastPlayedAt >= cooldownMillis) {
+                    SoundManager.playSpotted(context)
+                    lastPlayedAt = now
+                }
+                wasNear[idx] = near
             }
         }
     }
@@ -522,24 +560,14 @@ fun MazeGameScreen(
     // auto-resetting, so they're never caught off guard by a level suddenly
     // restarting itself.
 
-    val stars = if (!isWon) 0 else {
-        val safeMoves = moveCount.coerceAtLeast(1)
-        when {
-            hintsUsed == 0 && safeMoves <= optimalMoves -> 3
-            hintsUsed <= 1 && safeMoves <= optimalMoves + optimalMoves / 2 -> 2
-            else -> 1
-        }
-    }
+    // A clean run — no hints, no wasted moves — just for the win-screen
+    // flavor text/badge. Purely a per-attempt nicety now, nothing is scored
+    // or saved beyond whether the level has been cleared at all.
+    val perfectRun = isWon && hintsUsed == 0 && moveCount.coerceAtLeast(1) <= optimalMoves
 
-    // Save the best-ever star rating for this level once it's won, and note
-    // whether this particular run actually improved on the previous best —
-    // replaying a cleared level to shave off moves/hints is a core loop for
-    // completionist players, so it deserves its own little "New Best!" beat
-    // instead of looking identical to the very first clear.
-    var isNewBest by remember(level) { mutableStateOf(false) }
-    LaunchedEffect(isWon, stars) {
+    LaunchedEffect(isWon) {
         if (isWon) {
-            isNewBest = GameProgress.recordResult(context, category, levelNumber, stars)
+            GameProgress.markCompleted(context, category, levelNumber)
         }
     }
 
@@ -638,6 +666,8 @@ fun MazeGameScreen(
                     enemyAnimRows = enemyAnimRows,
                     enemyAnimCols = enemyAnimCols,
                     enemyDirections = enemyDirections,
+                    playerPhoto = playerPhoto,
+                    enemyPhotos = enemyPhotos,
                     playerColor = playerSkinColor,
                     enemyColor = enemySkinColor,
                     accentColor = categoryAccent,
@@ -673,13 +703,12 @@ fun MazeGameScreen(
 
         if (showWinOverlay) {
             WinOverlay(
-                stars = stars,
+                perfectRun = perfectRun,
                 moveCount = moveCount,
                 optimalMoves = optimalMoves,
                 elapsedSeconds = elapsedSeconds,
                 hasNextLevel = hasNextLevel,
                 hasEnemies = level.enemies.isNotEmpty(),
-                isNewBest = isNewBest,
                 onHome = { goHome() },
                 onReplay = { resetLevel() },
                 onNext = { goNextLevel() },
@@ -918,6 +947,8 @@ private fun MazeBoard(
     enemyAnimRows: List<Animatable<Float, AnimationVector1D>> = emptyList(),
     enemyAnimCols: List<Animatable<Float, AnimationVector1D>> = emptyList(),
     enemyDirections: List<Direction> = emptyList(),
+    playerPhoto: ImageBitmap? = null,
+    enemyPhotos: List<ImageBitmap> = emptyList(),
     playerColor: Color = AccentGold,
     enemyColor: Color = EnemyColor,
     accentColor: Color = AccentGold,
@@ -1102,7 +1133,8 @@ private fun MazeBoard(
                 val ex = ec * cellSize + cellSize / 2f
                 val ey = er * cellSize + cellSize / 2f + bobPx
                 val lookDir = enemyDirections.getOrNull(i) ?: Direction.SOUTH
-                drawEnemyGhost(center = Offset(ex, ey), cellSize = cellSize, alpha = enemyAlpha, lookDir = lookDir, bodyColor = enemyColor)
+                val enemyPhoto = enemyPhotos.takeIf { it.isNotEmpty() }?.let { it[i % it.size] }
+                drawEnemyGhost(center = Offset(ex, ey), cellSize = cellSize, alpha = enemyAlpha, lookDir = lookDir, bodyColor = enemyColor, photo = enemyPhoto)
             }
         }
 
@@ -1117,7 +1149,7 @@ private fun MazeBoard(
 
             // Player pops in with a springy overshoot (>1f briefly) rather than snapping to size.
             val playerScale = playerEntrance.value
-            drawPlayerHero(center = playerCenter, cellSize = cellSize, alpha = trailAlpha, scale = playerScale, bob = ghostBob, bodyColor = playerColor)
+            drawPlayerHero(center = playerCenter, cellSize = cellSize, alpha = trailAlpha, scale = playerScale, bob = ghostBob, bodyColor = playerColor, photo = playerPhoto)
 
             if (hintPath.size >= 2) {
                 val hintPoints = hintPath.map { cell ->
@@ -1141,13 +1173,44 @@ private fun MazeBoard(
  * bright core glow, and a friendly blinking-eyed face. Replaces the old
  * plain colored dot with something that actually reads as a character.
  */
+/**
+ * Draws a pre-masked circular [photo] (see [CharacterPhoto] — the alpha
+ * mask is baked in once at load time, not clipped per frame) at [center]
+ * with the given [radius], plus a thin ring in [ringColor] so it still
+ * reads as "the player" / "a guard" against the corridors, the same way
+ * the illustrated art used a color-coded glow.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCircularPhoto(
+    photo: ImageBitmap,
+    center: Offset,
+    radius: Float,
+    alpha: Float,
+    ringColor: Color
+) {
+    val topLeft = Offset(center.x - radius, center.y - radius)
+    val diameter = (radius * 2f)
+    drawImage(
+        image = photo,
+        dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
+        dstSize = IntSize(diameter.roundToInt(), diameter.roundToInt()),
+        alpha = alpha
+    )
+    drawCircle(
+        color = ringColor.copy(alpha = 0.9f * alpha),
+        radius = radius,
+        center = center,
+        style = Stroke(width = radius * 0.12f)
+    )
+}
+
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlayerHero(
     center: Offset,
     cellSize: Float,
     alpha: Float,
     scale: Float,
     bob: Float,
-    bodyColor: Color = AccentGold
+    bodyColor: Color = AccentGold,
+    photo: ImageBitmap? = null
 ) {
     val r = cellSize * 0.30f * scale
     val bodyCenter = center + Offset(0f, -r * 0.06f * bob)
@@ -1158,6 +1221,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlayerHero(
         radius = r * 1.7f,
         center = bodyCenter
     )
+
+    if (photo != null) {
+        drawCircularPhoto(photo = photo, center = bodyCenter, radius = r, alpha = alpha, ringColor = bodyColor)
+        return
+    }
 
     // Teardrop body: rounded bottom, two soft points at the top like little ears/flame tips.
     val body = Path().apply {
@@ -1227,7 +1295,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawEnemyGhost(
     cellSize: Float,
     alpha: Float,
     lookDir: Direction,
-    bodyColor: Color = EnemyColor
+    bodyColor: Color = EnemyColor,
+    photo: ImageBitmap? = null
 ) {
     val r = cellSize * 0.30f
     val bodyTop = center.y - r * 1.15f
@@ -1240,6 +1309,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawEnemyGhost(
         radius = r * 1.85f,
         center = Offset(center.x, center.y - r * 0.1f)
     )
+
+    if (photo != null) {
+        drawCircularPhoto(
+            photo = photo,
+            center = Offset(center.x, center.y - r * 0.1f),
+            radius = r,
+            alpha = alpha,
+            ringColor = bodyColor
+        )
+        return
+    }
 
     val body = Path().apply {
         moveTo(center.x - r, bodyBottom)
@@ -1490,9 +1570,9 @@ private fun GameTutorialOverlay(hintsAvailable: Boolean, onFinish: () -> Unit) {
             )
             add(
                 TutorialStep(
-                    icon = Icons.Filled.Star,
-                    title = "Earn up to 3 stars",
-                    body = "Finish in the fewest moves without using hints for the full 3 stars. You can always replay a cleared level later to improve your score."
+                    icon = Icons.Filled.EmojiEvents,
+                    title = "Reach the exit",
+                    body = "Get from the entrance to the exit to clear the level and unlock the next one. That's it — no scoring, just get through."
                 )
             )
         }
@@ -1669,13 +1749,12 @@ private fun PauseOverlay(onResume: () -> Unit, onRestart: () -> Unit, onHome: ()
 
 @Composable
 private fun WinOverlay(
-    stars: Int,
+    perfectRun: Boolean,
     moveCount: Int,
     optimalMoves: Int,
     elapsedSeconds: Int,
     hasNextLevel: Boolean,
     hasEnemies: Boolean = false,
-    isNewBest: Boolean = false,
     onHome: () -> Unit,
     onReplay: () -> Unit,
     onNext: () -> Unit,
@@ -1726,8 +1805,8 @@ private fun WinOverlay(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     when {
-                        stars >= 3 && hasEnemies -> "Perfect run — not a single guard laid eyes on you!"
-                        stars >= 3 -> "Perfect run — no wasted steps!"
+                        perfectRun && hasEnemies -> "Perfect run — not a single guard laid eyes on you. Ghost mode."
+                        perfectRun -> "Perfect run — no wasted steps. Show-off."
                         hasEnemies -> "You made it past every patrol — nice moves!"
                         else -> "Great maze-running!"
                     },
@@ -1735,21 +1814,10 @@ private fun WinOverlay(
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center
                 )
-                if (stars >= 3) {
+                if (perfectRun) {
                     Spacer(Modifier.height(8.dp))
                     PerfectBadge()
-                } else if (isNewBest) {
-                    Spacer(Modifier.height(8.dp))
-                    NewBestBadge()
                 }
-                Spacer(Modifier.height(16.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    repeat(3) { index ->
-                        StarPop(filled = index < stars, delayMillis = 150 + index * 140)
-                    }
-                }
-
                 Spacer(Modifier.height(18.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1813,51 +1881,6 @@ private fun PerfectBadge() {
             letterSpacing = 1.sp
         )
     }
-}
-
-/** Shown when a replay improves the previous star rating without hitting a perfect 3 — rewards grinding a level without making a plain clear feel identical to a personal record. */
-@Composable
-private fun NewBestBadge() {
-    val scale = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        delay(520)
-        scale.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 350f))
-    }
-    Row(
-        modifier = Modifier
-            .graphicsLayer(scaleX = scale.value, scaleY = scale.value)
-            .clip(RoundedCornerShape(20.dp))
-            .background(AccentGold.copy(alpha = 0.16f))
-            .padding(horizontal = 12.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(imageVector = Icons.Filled.WorkspacePremium, contentDescription = null, tint = AccentGold, modifier = Modifier.size(13.dp))
-        Text(
-            " NEW BEST",
-            color = AccentGold,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 1.sp
-        )
-    }
-}
-
-@Composable
-private fun StarPop(filled: Boolean, delayMillis: Int) {
-    val scale = remember { Animatable(0f) }
-    LaunchedEffect(filled) {
-        delay(delayMillis.toLong())
-        scale.animateTo(1.3f, tween(200))
-        scale.animateTo(1f, tween(130))
-    }
-    Icon(
-        imageVector = Icons.Filled.Star,
-        contentDescription = null,
-        tint = if (filled) AccentAmber else CardLocked,
-        modifier = Modifier
-            .size(34.dp)
-            .graphicsLayer(scaleX = scale.value, scaleY = scale.value)
-    )
 }
 
 @Composable
@@ -1961,9 +1984,19 @@ private fun RetryConfirmDialog(onCancel: () -> Unit, onConfirm: () -> Unit) {
     }
 }
 
+private val CAUGHT_CAPTIONS = listOf(
+    "A guard caught you — give it another shot!",
+    "Busted. The guard is extremely proud of themselves right now.",
+    "Caught red-handed. Or red-pixeled.",
+    "Well, that escalated quickly.",
+    "The guard really said 'gotcha' and meant it.",
+    "Skill issue. Respawn and cook."
+)
+
 @Composable
 private fun CaughtOverlay(onRetry: () -> Unit, onHome: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
+    val caption = remember { CAUGHT_CAPTIONS.random() }
     LaunchedEffect(Unit) { visible = true }
 
     Box(
@@ -2010,7 +2043,7 @@ private fun CaughtOverlay(onRetry: () -> Unit, onHome: () -> Unit) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "A guard caught you — give it another shot!",
+                    caption,
                     color = TextSecondary,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center
@@ -2059,10 +2092,10 @@ private fun LockedLevelNotice(onDismiss: () -> Unit) {
                     .padding(22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("COMING SOON", color = AccentAmber, fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                Text("HOLD UP", color = AccentAmber, fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "The next maze is still being built — check back soon!",
+                    "That maze isn't built yet — clear this one first, speedrunner.",
                     color = TextSecondary,
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center

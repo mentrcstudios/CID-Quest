@@ -13,6 +13,5 @@ package com.mentricstudios.cidquest.ads
 object AdIds {
     const val BANNER = "ca-app-pub-9019700052213764/4269397547"
     const val INTERSTITIAL = "ca-app-pub-9019700052213764/7170893051"
-    const val REWARDED_INTERSTITIAL = "ca-app-pub-9019700052213764/9589861194"
     const val REWARDED = "ca-app-pub-9019700052213764/6792187327"
 }

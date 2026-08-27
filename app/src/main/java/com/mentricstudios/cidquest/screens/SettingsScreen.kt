@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Star
@@ -53,6 +54,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.mentricstudios.cidquest.ads.BannerAd
@@ -64,6 +66,7 @@ import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.CardLocked
 import com.mentricstudios.cidquest.ui.theme.TextPrimary
 import com.mentricstudios.cidquest.ui.theme.TextSecondary
+import com.mentricstudios.cidquest.util.CharacterPhoto
 import com.mentricstudios.cidquest.util.NotificationPrefs
 import com.mentricstudios.cidquest.util.SettingsPrefs
 import com.mentricstudios.cidquest.util.bounceClick
@@ -78,8 +81,16 @@ fun SettingsScreen(onBack: () -> Unit) {
     var vibrationEnabled by remember { mutableStateOf(SettingsPrefs.isVibrationEnabled(context)) }
     var soundEnabled by remember { mutableStateOf(SettingsPrefs.isSoundEnabled(context)) }
     var remindersEnabled by remember { mutableStateOf(NotificationPrefs.areRemindersEnabled(context)) }
-    var showLegalDoc by remember { mutableStateOf(false) }
     var showMoreGamesNotice by remember { mutableStateOf(false) }
+    var hasCustomPhoto by remember { mutableStateOf(CharacterPhoto.hasCustomPhoto(context)) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            hasCustomPhoto = CharacterPhoto.saveFromUri(context, uri)
+        }
+    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -189,6 +200,22 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 )
 
+                SettingsButton(
+                    icon = Icons.Filled.Face,
+                    label = if (hasCustomPhoto) "CHANGE CHARACTER PHOTO" else "SET CHARACTER PHOTO"
+                ) {
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
+
+                if (hasCustomPhoto) {
+                    SettingsButton(icon = Icons.Filled.Face, label = "RESET TO DEFAULT PHOTO") {
+                        CharacterPhoto.clearCustomPhoto(context)
+                        hasCustomPhoto = false
+                    }
+                }
+
                 SettingsButton(icon = Icons.Filled.Email, label = "SUPPORT") {
                     sendSupportEmail(context)
                 }
@@ -222,36 +249,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                         .padding(6.dp)
                 )
                 Spacer(Modifier.height(4.dp))
-                Row {
-                    val privacyInteraction = remember { MutableInteractionSource() }
-                    Text(
-                        text = "PRIVACY POLICY",
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        modifier = Modifier
-                            .clickable(interactionSource = privacyInteraction, indication = null) { showLegalDoc = true }
-                            .padding(6.dp)
-                    )
-                    Text(text = "  |  ", color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
-                    val termsInteraction = remember { MutableInteractionSource() }
-                    Text(
-                        text = "TERMS OF SERVICE",
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        modifier = Modifier
-                            .clickable(interactionSource = termsInteraction, indication = null) { showLegalDoc = true }
-                            .padding(6.dp)
-                    )
-                }
             }
 
             Spacer(Modifier.height(12.dp))
             BannerAd()
         }
 
-        if (showLegalDoc) {
-            LegalDocNotice(onDismiss = { showLegalDoc = false })
-        }
         if (showMoreGamesNotice) {
             ComingSoonNotice(onDismiss = { showMoreGamesNotice = false })
         }
@@ -366,7 +369,7 @@ private fun ToggleSettingButton(
     }
 }
 
-/** Same visual language as [LegalDocNotice] — an honest "not built yet" state
+/** An honest "not built yet" state
  * instead of a button that silently does nothing when tapped. */
 @Composable
 private fun ComingSoonNotice(onDismiss: () -> Unit) {

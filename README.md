@@ -10,24 +10,30 @@ while dodging patrol guards that walk fixed back-and-forth routes — touching
 one resets the level. 50 hand-scaled levels, growing from a small, guard-light
 intro board up to a large, six-guard finale.
 
-Flow (first launch): `Loading → Terms of Service → Confirm Age → Home (Play) → Level Select → Game`
+Flow (first launch): `Loading → Confirm Age (18+) → Home (Play) → Level Select → Game`
 Flow (returning user): `Loading → Home (Play) → Level Select → Game`
 
 - `MainActivity.kt` — sets up the `NavHost` connecting every screen
 - `navigation/Routes.kt` — route names
 - `screens/LoadingScreen.kt` — splash with animated progress bar
-- `screens/TermsScreen.kt` — Terms of Service & Privacy Policy consent screen
-- `screens/AgeGateScreen.kt` — birthdate confirmation (month/day/year dropdown pickers)
-- `screens/HomeScreen.kt` — logo, Play button, gift/star top bar, bottom icon
-  row (sound, favorites, settings, shop)
+- `screens/AgeGateScreen.kt` — simple "Are you 18+?" Yes/No confirmation
+- `screens/HomeScreen.kt` — logo, Play button, bottom icon row (sound, settings)
 - `screens/LevelSelectScreen.kt` — 5-column level grid for all 50 levels
 - `screens/MazeGameScreen.kt` — the actual maze gameplay: movement, patrol
-  guards, hints ("Guiding Light"), pause/restart, star scoring, win/caught states
-- `screens/ShopScreen.kt` — unlockable cosmetic skins (player + guard), bought
-  with stars earned from play
+  guards (rendered as your own/gallery-picked photo vs. three fixed guard
+  photos), hints ("Guiding Light"), pause/restart, win/caught states — no
+  scoring, a level is simply cleared or not
 - `ui/theme/` — Navy & Gold "detective badge" palette, typography
 - `res/mipmap-*` / `res/drawable-nodpi/img_cid_logo.png` — launcher icon +
   in-app logo mark
+- `res/drawable/enemy_1.png` / `enemy_2.png` / `enemy_3.png` / `player_default.png`
+  — the character photos; `util/CharacterPhoto.kt` decodes, center-crops,
+  and circle-masks them once (cached for the process) and manages the
+  player's optional custom gallery photo
+
+This is a private/personal build — no stars, coins, shop, or daily-reward
+economy, no Privacy Policy screen, and the character art is real photos
+instead of the original illustrated spark/ghost sprites.
 
 ## Levels
 `game/MazeLevels.kt` holds the full 50-level catalog. Levels 1-2 are

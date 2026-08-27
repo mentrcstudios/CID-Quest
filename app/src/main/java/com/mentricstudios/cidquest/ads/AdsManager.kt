@@ -14,8 +14,6 @@ import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
-import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAd
-import com.google.android.gms.ads.rewardedinterstitial.RewardedInterstitialAdLoadCallback
 
 /**
  * Single place that owns every non-banner ad format: init, preloading the
@@ -40,11 +38,9 @@ object AdsManager {
 
     private var interstitialAd: InterstitialAd? = null
     private var rewardedAd: RewardedAd? = null
-    private var rewardedInterstitialAd: RewardedInterstitialAd? = null
 
     private var interstitialLoading = false
     private var rewardedLoading = false
-    private var rewardedInterstitialLoading = false
 
     /** Call once, e.g. from Application.onCreate or MainActivity.onCreate. */
     fun initialize(context: Context) {
@@ -55,7 +51,6 @@ object AdsManager {
         }
         preloadInterstitial(context)
         preloadRewarded(context)
-        preloadRewardedInterstitial(context)
     }
 
     // ---------------------------------------------------------------- //
@@ -190,65 +185,6 @@ object AdsManager {
         }
         ad.show(activity) { rewardItem ->
             earnedReward = true
-            onReward()
-        }
-    }
-
-    // ---------------------------------------------------------------- //
-    // Rewarded interstitial
-    // ---------------------------------------------------------------- //
-
-    fun preloadRewardedInterstitial(context: Context) {
-        if (rewardedInterstitialAd != null || rewardedInterstitialLoading) return
-        rewardedInterstitialLoading = true
-        RewardedInterstitialAd.load(
-            context.applicationContext,
-            AdIds.REWARDED_INTERSTITIAL,
-            AdRequest.Builder().build(),
-            object : RewardedInterstitialAdLoadCallback() {
-                override fun onAdLoaded(ad: RewardedInterstitialAd) {
-                    rewardedInterstitialLoading = false
-                    rewardedInterstitialAd = ad
-                }
-
-                override fun onAdFailedToLoad(error: LoadAdError) {
-                    rewardedInterstitialLoading = false
-                    rewardedInterstitialAd = null
-                    Log.d(TAG, "Rewarded interstitial failed to load: ${error.message}")
-                    retryHandler.postDelayed({ preloadRewardedInterstitial(context) }, RETRY_DELAY_MS)
-                }
-            }
-        )
-    }
-
-    fun isRewardedInterstitialReady(): Boolean = rewardedInterstitialAd != null
-
-    fun showRewardedInterstitial(
-        activity: Activity,
-        onReward: () -> Unit,
-        onClosed: () -> Unit = {},
-        onNotReady: () -> Unit = {}
-    ) {
-        val ad = rewardedInterstitialAd
-        if (ad == null) {
-            preloadRewardedInterstitial(activity)
-            onNotReady()
-            return
-        }
-        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdDismissedFullScreenContent() {
-                rewardedInterstitialAd = null
-                preloadRewardedInterstitial(activity)
-                onClosed()
-            }
-
-            override fun onAdFailedToShowFullScreenContent(error: AdError) {
-                rewardedInterstitialAd = null
-                preloadRewardedInterstitial(activity)
-                onNotReady()
-            }
-        }
-        ad.show(activity) { rewardItem ->
             onReward()
         }
     }

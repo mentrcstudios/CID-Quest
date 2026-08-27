@@ -32,11 +32,8 @@ import com.mentricstudios.cidquest.screens.LevelSelectScreen
 import com.mentricstudios.cidquest.screens.LoadingScreen
 import com.mentricstudios.cidquest.screens.MazeGameScreen
 import com.mentricstudios.cidquest.screens.SettingsScreen
-import com.mentricstudios.cidquest.screens.ShopScreen
 import com.mentricstudios.cidquest.screens.StudioSplashScreen
-import com.mentricstudios.cidquest.screens.TermsScreen
 import com.mentricstudios.cidquest.ui.theme.CidQuestTheme
-import com.mentricstudios.cidquest.util.GameProgress
 import com.mentricstudios.cidquest.util.NotificationPrefs
 import com.mentricstudios.cidquest.util.OnboardingPrefs
 
@@ -124,18 +121,10 @@ fun CidQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
                 val nextRoute = if (OnboardingPrefs.isOnboardingComplete(context)) {
                     Routes.HOME
                 } else {
-                    Routes.TERMS
+                    Routes.AGE_GATE
                 }
                 navController.navigate(nextRoute) {
                     popUpTo(Routes.LOADING) { inclusive = true }
-                }
-            })
-        }
-
-        composable(Routes.TERMS) {
-            TermsScreen(onAgree = {
-                navController.navigate(Routes.AGE_GATE) {
-                    popUpTo(Routes.TERMS) { inclusive = true }
                 }
             })
         }
@@ -152,15 +141,11 @@ fun CidQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
 
         composable(Routes.HOME) {
             HomeScreen(
-                starCount = GameProgress.totalStars(context),
                 onPlay = {
                     navController.navigate(Routes.levels("Enemies"))
                 },
                 onSettings = {
                     navController.navigate(Routes.SETTINGS)
-                },
-                onShop = {
-                    navController.navigate(Routes.SHOP)
                 }
             )
         }
@@ -169,15 +154,10 @@ fun CidQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
             SettingsScreen(onBack = { navController.popBackStack() })
         }
 
-        composable(Routes.SHOP) {
-            ShopScreen(onBack = { navController.popBackStack() })
-        }
-
         composable(Routes.LEVELS) { backStackEntry ->
             val categoryName = backStackEntry.arguments?.getString("categoryName") ?: "Enemies"
             LevelSelectScreen(
                 categoryName = categoryName,
-                starCount = GameProgress.totalStars(context),
                 totalLevels = MazeLevels.ENEMIES_TOTAL_LEVELS,
                 onLevelClick = { levelNumber ->
                     navController.navigate(Routes.game(categoryName, levelNumber))

@@ -17,9 +17,9 @@ object OnboardingPrefs {
         prefs.edit().putBoolean(KEY_ONBOARDING_DONE, true).apply()
     }
 
-    // Separate from the Terms/Age onboarding flag above — this tracks
+    // Separate from the Age-gate onboarding flag above — this tracks
     // whether the player has already been walked through the in-game
-    // "how to play" coach marks (swipe, hint, pause/stars), so it's only
+    // "how to play" coach marks (swipe, hint, pause/goal), so it's only
     // ever shown automatically once, the very first time someone opens a
     // level, on any device the app has been used on.
     fun hasSeenGameTutorial(context: Context): Boolean {
