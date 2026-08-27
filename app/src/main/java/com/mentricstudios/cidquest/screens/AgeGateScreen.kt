@@ -47,8 +47,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mentricstudios.cidquest.ui.theme.AccentOrange
-import com.mentricstudios.cidquest.ui.theme.AccentTeal
+import com.mentricstudios.cidquest.ui.theme.AccentAmber
+import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.CardLocked
@@ -137,7 +137,7 @@ fun AgeGateScreen(onConfirmed: () -> Unit) {
                     .border(
                         width = 1.dp,
                         brush = Brush.horizontalGradient(
-                            listOf(AccentTeal.copy(alpha = 0.5f), AccentOrange.copy(alpha = 0.35f))
+                            listOf(AccentGold.copy(alpha = 0.5f), AccentAmber.copy(alpha = 0.35f))
                         ),
                         shape = RoundedCornerShape(22.dp)
                     )
@@ -148,13 +148,13 @@ fun AgeGateScreen(onConfirmed: () -> Unit) {
                     modifier = Modifier
                         .size(52.dp)
                         .clip(CircleShape)
-                        .background(AccentTeal.copy(alpha = 0.14f)),
+                        .background(AccentGold.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.CalendarMonth,
                         contentDescription = null,
-                        tint = AccentTeal,
+                        tint = AccentGold,
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -233,7 +233,7 @@ fun AgeGateScreen(onConfirmed: () -> Unit) {
                         .bounceClick(confirmInteraction)
                         .clip(RoundedCornerShape(14.dp))
                         .background(
-                            Brush.horizontalGradient(listOf(AccentTeal, AccentTeal.copy(alpha = 0.7f)))
+                            Brush.horizontalGradient(listOf(AccentGold, AccentGold.copy(alpha = 0.7f)))
                         )
                         .clickable(interactionSource = confirmInteraction, indication = null) {
                             if (isOldEnough(monthIndex, day, year)) {
@@ -269,12 +269,12 @@ fun AgeGateScreen(onConfirmed: () -> Unit) {
                         Icon(
                             imageVector = Icons.Filled.ErrorOutline,
                             contentDescription = null,
-                            tint = AccentOrange,
+                            tint = AccentAmber,
                             modifier = Modifier.size(15.dp)
                         )
                         Text(
                             text = "  You must be at least $MIN_AGE years old to use this app.",
-                            color = AccentOrange,
+                            color = AccentAmber,
                             fontSize = 12.sp
                         )
                     }
@@ -283,7 +283,7 @@ fun AgeGateScreen(onConfirmed: () -> Unit) {
                 Row(modifier = Modifier.padding(top = 16.dp)) {
                     Text(
                         text = "Terms of Service",
-                        color = AccentTeal,
+                        color = AccentGold,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable { showLegalDoc = true }
@@ -291,7 +291,7 @@ fun AgeGateScreen(onConfirmed: () -> Unit) {
                     Text(text = "  |  ", color = TextSecondary, fontSize = 12.sp)
                     Text(
                         text = "Privacy Policy",
-                        color = AccentTeal,
+                        color = AccentGold,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable { showLegalDoc = true }
@@ -323,7 +323,7 @@ private fun PickerField(
                 .background(CardLocked)
                 .border(
                     width = 1.dp,
-                    color = if (expanded) AccentTeal.copy(alpha = 0.6f) else Color.Transparent,
+                    color = if (expanded) AccentGold.copy(alpha = 0.6f) else Color.Transparent,
                     shape = RoundedCornerShape(12.dp)
                 )
                 .clickable(interactionSource = interactionSource, indication = null) { onOpen() }

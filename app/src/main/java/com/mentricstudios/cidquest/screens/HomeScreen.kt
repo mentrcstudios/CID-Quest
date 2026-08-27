@@ -65,8 +65,8 @@ import androidx.compose.ui.window.Dialog
 import com.mentricstudios.cidquest.R
 import com.mentricstudios.cidquest.ads.AdsManager
 import com.mentricstudios.cidquest.ads.BannerAd
-import com.mentricstudios.cidquest.ui.theme.AccentOrange
-import com.mentricstudios.cidquest.ui.theme.AccentTeal
+import com.mentricstudios.cidquest.ui.theme.AccentAmber
+import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.CardLocked
@@ -118,7 +118,7 @@ fun HomeScreen(
             HomeLogoMark()
 
             Text(
-                text = "MAZE",
+                text = "CID",
                 color = TextPrimary,
                 fontSize = 40.sp,
                 fontWeight = FontWeight.Black,
@@ -126,7 +126,7 @@ fun HomeScreen(
             )
             Text(
                 text = "QUEST",
-                color = AccentTeal,
+                color = AccentGold,
                 fontSize = 40.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 7.sp
@@ -145,12 +145,12 @@ fun HomeScreen(
                     Icon(
                         imageVector = Icons.Filled.LocalFireDepartment,
                         contentDescription = null,
-                        tint = AccentOrange,
+                        tint = AccentAmber,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = " ${DailyRewards.currentStreak(context)}-day streak",
-                        color = AccentOrange,
+                        color = AccentAmber,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -243,11 +243,11 @@ private fun HomeLogoMark(modifier: Modifier = Modifier) {
                 .size(112.dp)
                 .graphicsLayer { scaleX = breathe; scaleY = breathe }
                 .clip(CircleShape)
-                .background(AccentTeal.copy(alpha = glowAlpha))
+                .background(AccentGold.copy(alpha = glowAlpha))
         )
         Image(
             painter = painterResource(id = R.drawable.img_cid_logo),
-            contentDescription = "CID Quest logo",
+            contentDescription = "Cid Quest logo",
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .size(88.dp)
@@ -277,14 +277,14 @@ private fun PlayButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
             modifier = Modifier
                 .size((108 * glowScale).dp)
                 .clip(CircleShape)
-                .background(AccentTeal.copy(alpha = 0.10f))
+                .background(AccentGold.copy(alpha = 0.10f))
         )
 
         Box(
             modifier = Modifier
                 .size(108.dp)
                 .clip(CircleShape)
-                .background(AccentTeal.copy(alpha = 0.18f))
+                .background(AccentGold.copy(alpha = 0.18f))
                 .bounceClick(interactionSource)
                 .clickable(
                     interactionSource = interactionSource,
@@ -293,7 +293,7 @@ private fun PlayButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = "Play", tint = AccentTeal, modifier = Modifier.size(44.dp))
+            Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = "Play", tint = AccentGold, modifier = Modifier.size(44.dp))
         }
     }
 }
@@ -306,12 +306,12 @@ private fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, show
             modifier = Modifier
                 .size(50.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(AccentTeal.copy(alpha = 0.14f))
+                .background(AccentGold.copy(alpha = 0.14f))
                 .bounceClick(interactionSource)
                 .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(22.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = AccentGold, modifier = Modifier.size(22.dp))
         }
         // Small unclaimed-reward dot — a nudge to come back and tap it, the
         // same pattern players already recognize from every other app.
@@ -322,7 +322,7 @@ private fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, show
                     .offset(x = 4.dp, y = (-4).dp)
                     .size(13.dp)
                     .clip(CircleShape)
-                    .background(AccentOrange)
+                    .background(AccentAmber)
             )
         }
     }
@@ -333,14 +333,14 @@ private fun StarCounter(count: Int) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(22.dp))
-            .background(AccentOrange.copy(alpha = 0.16f))
+            .background(AccentAmber.copy(alpha = 0.16f))
             .padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(19.dp))
+        Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(19.dp))
         Text(
             text = "  $count",
-            color = AccentOrange,
+            color = AccentAmber,
             fontSize = 19.sp,
             fontWeight = FontWeight.Bold
         )
@@ -445,7 +445,7 @@ private fun DailyRewardDialog(onClaim: (Int) -> Unit, onDismiss: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (claimed) CardLocked else AccentTeal)
+                        .background(if (claimed) CardLocked else AccentGold)
                         .bounceClick(interactionSource, pressedScale = if (claimed) 1f else 0.95f)
                         .clickable(
                             enabled = !claimed,
@@ -484,7 +484,7 @@ private fun DailyRewardDialog(onClaim: (Int) -> Unit, onDismiss: () -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
-                            .background(AccentOrange.copy(alpha = if (doubling) 0.5f else 1f))
+                            .background(AccentAmber.copy(alpha = if (doubling) 0.5f else 1f))
                             .bounceClick(doubleInteraction, pressedScale = 0.95f)
                             .clickable(
                                 enabled = !doubling,
@@ -532,13 +532,13 @@ private fun DayCell(day: Int, reward: Int, state: DayCellState) {
         }
     }
     val bg = when (state) {
-        DayCellState.PAST, DayCellState.CLAIMED -> AccentTeal.copy(alpha = 0.22f)
-        DayCellState.TODAY -> AccentOrange.copy(alpha = 0.28f)
+        DayCellState.PAST, DayCellState.CLAIMED -> AccentGold.copy(alpha = 0.22f)
+        DayCellState.TODAY -> AccentAmber.copy(alpha = 0.28f)
         DayCellState.FUTURE -> CardLocked
     }
     val textColor = when (state) {
-        DayCellState.TODAY -> AccentOrange
-        DayCellState.PAST, DayCellState.CLAIMED -> AccentTeal
+        DayCellState.TODAY -> AccentAmber
+        DayCellState.PAST, DayCellState.CLAIMED -> AccentGold
         DayCellState.FUTURE -> TextSecondary
     }
     Column(

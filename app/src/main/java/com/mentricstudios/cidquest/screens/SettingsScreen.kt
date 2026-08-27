@@ -57,8 +57,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.mentricstudios.cidquest.ads.BannerAd
 import com.mentricstudios.cidquest.notifications.ReminderScheduler
-import com.mentricstudios.cidquest.ui.theme.AccentOrange
-import com.mentricstudios.cidquest.ui.theme.AccentTeal
+import com.mentricstudios.cidquest.ui.theme.AccentAmber
+import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.CardLocked
@@ -262,7 +262,7 @@ private fun sendSupportEmail(context: android.content.Context) {
     val intent = Intent(Intent.ACTION_SENDTO).apply {
         data = Uri.parse("mailto:")
         putExtra(Intent.EXTRA_EMAIL, arrayOf(SUPPORT_EMAIL))
-        putExtra(Intent.EXTRA_SUBJECT, "CID Quest — Support")
+        putExtra(Intent.EXTRA_SUBJECT, "Cid Quest — Support")
     }
     try {
         context.startActivity(intent)
@@ -299,14 +299,14 @@ private fun SettingsButton(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(AccentTeal.copy(alpha = 0.16f))
+            .background(AccentGold.copy(alpha = 0.16f))
             .bounceClick(interactionSource)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(vertical = 18.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(18.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = AccentGold, modifier = Modifier.size(18.dp))
         Text(
             text = "  $label",
             color = TextPrimary,
@@ -329,14 +329,14 @@ private fun ToggleSettingButton(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(AccentTeal.copy(alpha = 0.16f))
+            .background(AccentGold.copy(alpha = 0.16f))
             .bounceClick(interactionSource)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onToggle)
             .padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(imageVector = icon, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(18.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = AccentGold, modifier = Modifier.size(18.dp))
             Text(
                 text = "  $label",
                 color = TextPrimary,
@@ -349,7 +349,7 @@ private fun ToggleSettingButton(
         Row {
             Text(
                 text = "ON",
-                color = if (enabled) AccentOrange else TextSecondary.copy(alpha = 0.5f),
+                color = if (enabled) AccentAmber else TextSecondary.copy(alpha = 0.5f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 1.sp
@@ -357,7 +357,7 @@ private fun ToggleSettingButton(
             Text(text = "  /  ", color = TextSecondary.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Black)
             Text(
                 text = "OFF",
-                color = if (!enabled) AccentOrange else TextSecondary.copy(alpha = 0.5f),
+                color = if (!enabled) AccentAmber else TextSecondary.copy(alpha = 0.5f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 1.sp
@@ -399,7 +399,7 @@ private fun ComingSoonNotice(onDismiss: () -> Unit) {
                     .padding(22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("COMING SOON", color = AccentOrange, fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                Text("COMING SOON", color = AccentAmber, fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "We're just getting started — more games from us are on the way!",

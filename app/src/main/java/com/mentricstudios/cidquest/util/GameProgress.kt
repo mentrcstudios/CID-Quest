@@ -43,7 +43,7 @@ object GameProgress {
      * plus any bonus stars claimed from the daily-streak reward (see
      * [DailyRewards]) — both currencies feed the same star counter everywhere.
      */
-    fun totalStars(context: Context, levels: List<MazeLevel> = MazeLevels.CLASSIC + MazeLevels.ICE_FLOOR + MazeLevels.DARKNESS): Int {
+    fun totalStars(context: Context, levels: List<MazeLevel> = MazeLevels.ENEMIES): Int {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val levelStars = levels.sumOf { level -> prefs.getInt(key(level.category, level.levelNumber), 0) }
         return levelStars + DailyRewards.bonusStars(context)

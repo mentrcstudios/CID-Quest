@@ -38,8 +38,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mentricstudios.cidquest.ui.theme.AccentOrange
-import com.mentricstudios.cidquest.ui.theme.AccentTeal
+import com.mentricstudios.cidquest.ui.theme.AccentAmber
+import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.TextPrimary
@@ -84,7 +84,7 @@ fun TermsScreen(onAgree: () -> Unit) {
                     .border(
                         width = 1.dp,
                         brush = Brush.horizontalGradient(
-                            listOf(AccentTeal.copy(alpha = 0.5f), AccentOrange.copy(alpha = 0.35f))
+                            listOf(AccentGold.copy(alpha = 0.5f), AccentAmber.copy(alpha = 0.35f))
                         ),
                         shape = RoundedCornerShape(22.dp)
                     )
@@ -94,13 +94,13 @@ fun TermsScreen(onAgree: () -> Unit) {
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(AccentTeal.copy(alpha = 0.14f)),
+                        .background(AccentGold.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Gavel,
                         contentDescription = null,
-                        tint = AccentTeal,
+                        tint = AccentGold,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -125,7 +125,7 @@ fun TermsScreen(onAgree: () -> Unit) {
                 Row(modifier = Modifier.padding(top = 4.dp)) {
                     Text(
                         text = "Terms of Service",
-                        color = AccentTeal,
+                        color = AccentGold,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable { showLegalDoc = true }
@@ -133,7 +133,7 @@ fun TermsScreen(onAgree: () -> Unit) {
                     Text(text = "   ·   ", color = TextSecondary, fontSize = 13.sp)
                     Text(
                         text = "Privacy Policy",
-                        color = AccentTeal,
+                        color = AccentGold,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable { showLegalDoc = true }
@@ -152,7 +152,7 @@ fun TermsScreen(onAgree: () -> Unit) {
                             .bounceClick(agreeInteraction)
                             .clip(RoundedCornerShape(14.dp))
                             .background(
-                                Brush.horizontalGradient(listOf(AccentTeal, AccentTeal.copy(alpha = 0.7f)))
+                                Brush.horizontalGradient(listOf(AccentGold, AccentGold.copy(alpha = 0.7f)))
                             )
                             .clickable(interactionSource = agreeInteraction, indication = null, onClick = onAgree)
                             .padding(horizontal = 22.dp),

@@ -49,8 +49,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mentricstudios.cidquest.ui.theme.AccentOrange
-import com.mentricstudios.cidquest.ui.theme.AccentTeal
+import com.mentricstudios.cidquest.ui.theme.AccentAmber
+import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.TextPrimary
 import com.mentricstudios.cidquest.ui.theme.TextSecondary
@@ -95,7 +95,7 @@ fun LegalDocNotice(onDismiss: () -> Unit) {
                     .border(
                         width = 1.dp,
                         brush = Brush.horizontalGradient(
-                            listOf(AccentTeal.copy(alpha = 0.4f), AccentOrange.copy(alpha = 0.3f))
+                            listOf(AccentGold.copy(alpha = 0.4f), AccentAmber.copy(alpha = 0.3f))
                         ),
                         shape = RoundedCornerShape(20.dp)
                     )
@@ -108,12 +108,12 @@ fun LegalDocNotice(onDismiss: () -> Unit) {
                     Icon(
                         imageVector = Icons.Filled.Shield,
                         contentDescription = null,
-                        tint = AccentOrange,
+                        tint = AccentAmber,
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
                         "  TERMS & PRIVACY",
-                        color = AccentOrange,
+                        color = AccentAmber,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp,
@@ -148,7 +148,7 @@ fun LegalDocNotice(onDismiss: () -> Unit) {
                         .height(1.dp)
                         .background(
                             Brush.horizontalGradient(
-                                listOf(AccentTeal.copy(alpha = 0.5f), Color.Transparent)
+                                listOf(AccentGold.copy(alpha = 0.5f), Color.Transparent)
                             )
                         )
                 )
@@ -160,8 +160,8 @@ fun LegalDocNotice(onDismiss: () -> Unit) {
                 ) {
                     LegalSection(
                         icon = Icons.Filled.Gavel,
-                        title = "Using CID Quest",
-                        body = "CID Quest is provided for personal, non-commercial entertainment. " +
+                        title = "Using Cid Quest",
+                        body = "Cid Quest is provided for personal, non-commercial entertainment. " +
                             "By playing, you agree not to modify, reverse-engineer, or redistribute the app, " +
                             "and to use it in line with applicable local laws."
                     )
@@ -182,7 +182,7 @@ fun LegalDocNotice(onDismiss: () -> Unit) {
                     LegalSection(
                         icon = Icons.Filled.Shield,
                         title = "Data we collect",
-                        body = "Beyond what the ad network collects for ad delivery, CID Quest does not " +
+                        body = "Beyond what the ad network collects for ad delivery, Cid Quest does not " +
                             "require an account, does not collect personal information, and does not send " +
                             "your gameplay data to our own servers. Play reminder notifications (if enabled) " +
                             "are scheduled entirely on this device."
@@ -214,7 +214,7 @@ private fun LegalSection(icon: ImageVector, title: String, body: String) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = AccentTeal,
+                tint = AccentGold,
                 modifier = Modifier.size(15.dp)
             )
             Text(

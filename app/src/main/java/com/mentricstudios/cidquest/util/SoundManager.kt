@@ -45,7 +45,7 @@ object SoundManager {
      *
      * Every call to [startBackgroundMusic] bumps this, even when an already-
      * playing track is left alone. That second part matters: when the user
-     * moves from one level straight into another, Compose doesn't
+     * moves from one enemy/ice level straight into another, Compose doesn't
      * guarantee whether the outgoing screen's `onDispose` or the incoming
      * screen's `DisposableEffect` runs first.
      *

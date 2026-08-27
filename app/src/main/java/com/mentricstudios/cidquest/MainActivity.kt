@@ -27,7 +27,6 @@ import com.mentricstudios.cidquest.navigation.Routes
 import com.mentricstudios.cidquest.notifications.NotificationChannels
 import com.mentricstudios.cidquest.notifications.ReminderScheduler
 import com.mentricstudios.cidquest.screens.AgeGateScreen
-import com.mentricstudios.cidquest.screens.CategoriesScreen
 import com.mentricstudios.cidquest.screens.HomeScreen
 import com.mentricstudios.cidquest.screens.LevelSelectScreen
 import com.mentricstudios.cidquest.screens.LoadingScreen
@@ -36,7 +35,7 @@ import com.mentricstudios.cidquest.screens.SettingsScreen
 import com.mentricstudios.cidquest.screens.ShopScreen
 import com.mentricstudios.cidquest.screens.StudioSplashScreen
 import com.mentricstudios.cidquest.screens.TermsScreen
-import com.mentricstudios.cidquest.ui.theme.CIDQuestTheme
+import com.mentricstudios.cidquest.ui.theme.CidQuestTheme
 import com.mentricstudios.cidquest.util.GameProgress
 import com.mentricstudios.cidquest.util.NotificationPrefs
 import com.mentricstudios.cidquest.util.OnboardingPrefs
@@ -66,8 +65,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            CIDQuestTheme {
-                CIDQuestApp(onOnboardingJustCompleted = { ensureNotificationPermissionThenSchedule() })
+            CidQuestTheme {
+                CidQuestApp(onOnboardingJustCompleted = { ensureNotificationPermissionThenSchedule() })
             }
         }
     }
@@ -89,7 +88,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun CIDQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
+fun CidQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
     val navController = rememberNavController()
     val context = LocalContext.current
 
@@ -155,7 +154,7 @@ fun CIDQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
             HomeScreen(
                 starCount = GameProgress.totalStars(context),
                 onPlay = {
-                    navController.navigate(Routes.CATEGORIES)
+                    navController.navigate(Routes.levels("Enemies"))
                 },
                 onSettings = {
                     navController.navigate(Routes.SETTINGS)
@@ -174,33 +173,12 @@ fun CIDQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
             ShopScreen(onBack = { navController.popBackStack() })
         }
 
-        composable(Routes.CATEGORIES) {
-            CategoriesScreen(
-                starCount = GameProgress.totalStars(context),
-                classicCompleted = GameProgress.completedCount(context, MazeLevels.CLASSIC),
-                classicTotal = MazeLevels.CLASSIC.size,
-                iceCompleted = GameProgress.completedCount(context, MazeLevels.ICE_FLOOR),
-                iceTotal = MazeLevels.ICE_FLOOR.size,
-                darknessCompleted = GameProgress.completedCount(context, MazeLevels.DARKNESS),
-                darknessTotal = MazeLevels.DARKNESS_TOTAL_LEVELS,
-                onCategoryClick = { category ->
-                    navController.navigate(Routes.levels(category.name))
-                },
-                onBack = { navController.popBackStack() }
-            )
-        }
-
         composable(Routes.LEVELS) { backStackEntry ->
-            val categoryName = backStackEntry.arguments?.getString("categoryName") ?: "Classic"
-            val totalLevels = when (categoryName) {
-                "Ice Floor" -> MazeLevels.ICE_FLOOR.size
-                "Darkness" -> MazeLevels.DARKNESS_TOTAL_LEVELS
-                else -> MazeLevels.CLASSIC.size
-            }
+            val categoryName = backStackEntry.arguments?.getString("categoryName") ?: "Enemies"
             LevelSelectScreen(
                 categoryName = categoryName,
                 starCount = GameProgress.totalStars(context),
-                totalLevels = totalLevels,
+                totalLevels = MazeLevels.ENEMIES_TOTAL_LEVELS,
                 onLevelClick = { levelNumber ->
                     navController.navigate(Routes.game(categoryName, levelNumber))
                 },
@@ -215,7 +193,7 @@ fun CIDQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
                 navArgument("levelNumber") { type = NavType.IntType }
             )
         ) { backStackEntry ->
-            val categoryName = backStackEntry.arguments?.getString("categoryName") ?: "Classic"
+            val categoryName = backStackEntry.arguments?.getString("categoryName") ?: "Enemies"
             val levelNumber = backStackEntry.arguments?.getInt("levelNumber") ?: 1
             MazeGameScreen(
                 category = categoryName,

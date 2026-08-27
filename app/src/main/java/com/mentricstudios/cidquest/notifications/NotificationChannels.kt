@@ -18,7 +18,7 @@ object NotificationChannels {
             "Play reminders",
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Occasional reminders to jump back into CID Quest"
+            description = "Occasional reminders to jump back into Cid Quest"
         }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

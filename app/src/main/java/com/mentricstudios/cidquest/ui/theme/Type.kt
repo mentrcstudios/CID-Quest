@@ -9,15 +9,15 @@ val AppTypography = Typography(
     headlineLarge = TextStyle(
         fontWeight = FontWeight.Black,
         fontSize = 40.sp,
-        letterSpacing = 1.sp
+        letterSpacing = 1.5.sp
     ),
     bodyLarge = TextStyle(
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp
     ),
     labelLarge = TextStyle(
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 14.sp,
-        letterSpacing = 2.sp
+        letterSpacing = 3.sp
     )
 )

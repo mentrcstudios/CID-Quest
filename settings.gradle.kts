@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CID Quest"
+rootProject.name = "Cid Quest"
 include(":app")

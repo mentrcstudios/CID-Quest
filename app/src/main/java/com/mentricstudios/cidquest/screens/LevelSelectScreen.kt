@@ -55,8 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mentricstudios.cidquest.ads.BannerAd
 import com.mentricstudios.cidquest.game.MazeLevels
-import com.mentricstudios.cidquest.ui.theme.AccentOrange
-import com.mentricstudios.cidquest.ui.theme.AccentTeal
+import com.mentricstudios.cidquest.ui.theme.AccentAmber
+import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.CardLocked
@@ -164,7 +164,7 @@ fun LevelSelectScreen(
                     )
                 }
                 Text(
-                    text = categoryName.uppercase(),
+                    text = "SELECT LEVEL",
                     color = TextPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
@@ -173,12 +173,12 @@ fun LevelSelectScreen(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(AccentOrange.copy(alpha = 0.15f))
+                        .background(AccentAmber.copy(alpha = 0.15f))
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(13.dp))
-                    Text(text = " $starCount", color = AccentOrange, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(13.dp))
+                    Text(text = " $starCount", color = AccentAmber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
 
@@ -244,7 +244,7 @@ private fun ComingSoonOverlay(onDismiss: () -> Unit) {
                     .padding(22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("COMING SOON", color = AccentOrange, fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                Text("COMING SOON", color = AccentAmber, fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "Maze gameplay for this level is still in development — check back in the full release!",
@@ -305,18 +305,18 @@ private fun LevelTile(
                 alpha = entranceAlpha
             }
             .clip(RoundedCornerShape(12.dp))
-            .background(if (unlocked) AccentTeal.copy(alpha = 0.18f) else CardLocked)
+            .background(if (unlocked) AccentGold.copy(alpha = 0.18f) else CardLocked)
             .bounceClick(interactionSource)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         if (unlocked) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "$number", color = AccentTeal, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(text = "$number", color = AccentGold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 if (earnedStars > 0) {
                     Row {
                         repeat(earnedStars) {
-                            Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(9.dp))
+                            Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(9.dp))
                         }
                     }
                 }

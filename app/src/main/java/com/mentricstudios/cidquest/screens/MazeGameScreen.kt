@@ -42,7 +42,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +81,7 @@ import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.SentimentVeryDissatisfied
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.WorkspacePremium
@@ -96,27 +96,22 @@ import com.mentricstudios.cidquest.game.MazeLevel
 import com.mentricstudios.cidquest.game.MazeLevels
 import com.mentricstudios.cidquest.game.SkinType
 import com.mentricstudios.cidquest.game.SkinsCatalog
-import com.mentricstudios.cidquest.ui.theme.AccentOrange
-import com.mentricstudios.cidquest.ui.theme.AccentTeal
+import com.mentricstudios.cidquest.ui.theme.AccentAmber
+import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.CardLocked
-import com.mentricstudios.cidquest.ui.theme.CategoryClassic
-import com.mentricstudios.cidquest.ui.theme.CategoryDarkness
-import com.mentricstudios.cidquest.ui.theme.CategoryIce
-import com.mentricstudios.cidquest.ui.theme.IceBoardBottom
-import com.mentricstudios.cidquest.ui.theme.IceBoardTop
-import com.mentricstudios.cidquest.ui.theme.IceSparkle
-import com.mentricstudios.cidquest.ui.theme.IceWallColor
+import com.mentricstudios.cidquest.ui.theme.CategoryEnemies
+import com.mentricstudios.cidquest.ui.theme.EnemyColor
 import com.mentricstudios.cidquest.ui.theme.TextPrimary
 import com.mentricstudios.cidquest.ui.theme.TextSecondary
-import com.mentricstudios.cidquest.ui.theme.WispGold
 import com.mentricstudios.cidquest.util.GameProgress
 import com.mentricstudios.cidquest.util.OnboardingPrefs
 import com.mentricstudios.cidquest.util.SettingsPrefs
 import com.mentricstudios.cidquest.util.SkinPrefs
 import com.mentricstudios.cidquest.util.SoundManager
 import com.mentricstudios.cidquest.util.bounceClick
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -124,9 +119,6 @@ import kotlin.math.cos
 import kotlin.math.sign
 import kotlin.math.sin
 import kotlin.random.Random
-
-/** Glide speed for Ice Floor slides — lower is faster/more "frictionless". */
-private const val ICE_SLIDE_MS_PER_CELL = 70
 
 /**
  * A wall endpoint's position after the cell's tiny inward "settle" animation
@@ -213,29 +205,27 @@ fun MazeGameScreen(
     val playerSkinColor = remember {
         SkinsCatalog.colorFor(SkinType.PLAYER, SkinPrefs.selectedSkinId(context, SkinType.PLAYER))
     }
+    val enemySkinColor = remember {
+        SkinsCatalog.colorFor(SkinType.ENEMY, SkinPrefs.selectedSkinId(context, SkinType.ENEMY))
+    }
     fun vibrate(type: HapticFeedbackType) {
         if (vibrationEnabled) haptics.performHapticFeedback(type)
     }
 
-    // Ice Floor category: zero movement friction. A swipe doesn't nudge the
-    // player one cell and stop at the next intersection like every other
-    // category — it commits to a full slide in that direction and only stops
-    // when the next cell is a genuine wall. See the ice branch in [tryMove].
-    val isIceFloor = remember(category) { category.equals("Ice Floor", ignoreCase = true) }
-    // Darkness category: real-time fog-of-war instead of a reveal-once wave.
-    // Driven off the level's own visionRadius (rather than just the category
-    // name) so the board renderer only needs one signal to switch modes.
-    val isDarkness = remember(level) { level.visionRadius != null }
-    // Per-category accent used for the goal ring / entrance stub / win
-    // particles, so each mode reads visually distinct instead of everything
-    // reusing Classic's cyan.
-    val categoryAccent = remember(category) {
-        when {
-            category.equals("Ice Floor", ignoreCase = true) -> CategoryIce
-            category.equals("Darkness", ignoreCase = true) -> CategoryDarkness
-            else -> CategoryClassic
-        }
+    // Heartbeat loop plays for the life of this screen whenever the level has
+    // patrol guards — keyed off the level's actual enemy list.
+    val hasEnemyThreat = remember(category, level) { level.enemies.isNotEmpty() }
+    DisposableEffect(hasEnemyThreat) {
+        // Capture the ownership token from this specific start call so our
+        // onDispose can only stop the track if nobody newer has taken over
+        // it in the meantime (see SoundManager.playToken for why this
+        // matters — it's what fixes the intermittent "no heartbeat" bug).
+        val myToken = if (hasEnemyThreat) SoundManager.startBackgroundMusic(context) else null
+        onDispose { SoundManager.stopBackgroundMusic(myToken) }
     }
+
+    // Accent used for the goal ring / entrance stub / win particles.
+    val categoryAccent = CategoryEnemies
 
     // Distance of every cell from the entrance, used to sweep the maze into view
     // as an outward "ink" wave rather than popping in all at once.
@@ -290,67 +280,24 @@ fun MazeGameScreen(
     // Drives the goal-reached particle burst, 0f (idle) -> 1f (finished).
     val celebration = remember(level) { Animatable(0f) }
 
-    // Bumped every time the level resets so per-level coroutines below
-    // restart cleanly from scratch instead of continuing mid-flight.
+    // --- Enemies category: fixed-path patrol guards ---------------------
+    // Each guard's actual walkable route is derived once from the grid (a
+    // perfect maze has exactly one route between any two cells), then the
+    // guard ping-pongs back and forth along it forever.
+    val enemyPaths = remember(level, grid) {
+        level.enemies.map { enemy -> MazeGenerator.shortestPath(grid, enemy.from, enemy.to) }
+    }
+    val enemyAnimRows = remember(level) { level.enemies.map { Animatable(it.from.row.toFloat()) } }
+    val enemyAnimCols = remember(level) { level.enemies.map { Animatable(it.from.col.toFloat()) } }
+    // Which way each guard is currently facing — drives the eyes so they
+    // visibly "look" the direction they're walking instead of staring blankly.
+    val enemyDirections = remember(level) {
+        mutableStateListOf(*Array(level.enemies.size) { Direction.SOUTH })
+    }
+    // Bumped every time the level resets so enemy-patrol coroutines restart
+    // cleanly from their spawn point instead of continuing mid-stride.
     var resetTick by remember(level) { mutableStateOf(0) }
     var isCaught by remember(level) { mutableStateOf(false) }
-
-    // How many cells the most recent Ice Floor slide covered — read by the
-    // glide animation below to time a constant-speed (frictionless) slide
-    // instead of the springy single-cell hop used everywhere else.
-    var slideCellCount by remember(level) { mutableStateOf(0) }
-    val gameScope = rememberCoroutineScope()
-
-    // --- Darkness: wisp light pickups ------------------------------------
-    // Small collectible motes (level.wisps) scattered through the fog on
-    // levels 11+. Walking over one permanently widens the torch a notch for
-    // the rest of the attempt — see wispBonus below — so a level becomes a
-    // real choice between a direct route and a detour for more light.
-    val collectedWisps = remember(level) { mutableStateListOf<CellPos>() }
-    LaunchedEffect(level, resetTick) {
-        collectedWisps.clear()
-        if (level.wisps.isEmpty()) return@LaunchedEffect
-        while (true) {
-            delay(16)
-            if (isPaused || isWon || isCaught || showTutorial || playerEntrance.value < 1f) continue
-            val hit = level.wisps.firstOrNull { wisp ->
-                wisp !in collectedWisps &&
-                    abs(animRow.value - wisp.row.toFloat()) < 0.55f &&
-                    abs(animCol.value - wisp.col.toFloat()) < 0.55f
-            }
-            if (hit != null) {
-                collectedWisps.add(hit)
-                SoundManager.playClick(context)
-            }
-        }
-    }
-    // Each wisp adds a small, permanent widening to the torch radius for
-    // this attempt, capped so exploring for every last one isn't strictly
-    // required — it's a bonus, not a puzzle gate.
-    val wispBonus = (collectedWisps.size * 0.16f).coerceAtMost(0.55f)
-
-    // --- Darkness: gusts ---------------------------------------------------
-    // On levels 26+ (level.hasGusts) the torch periodically gutters down to
-    // a sliver for about a second before recovering, forcing a brief
-    // "freeze and trust the memory trail" beat instead of only ever reading
-    // live light. A single loop per level/reset — no races with itself.
-    val gustMultiplier = remember(level) { Animatable(1f) }
-    LaunchedEffect(level, resetTick) {
-        gustMultiplier.snapTo(1f)
-        if (!level.hasGusts) return@LaunchedEffect
-        while (true) {
-            val waitMillis = (5200..8600).random().toLong()
-            delay(waitMillis)
-            while (isPaused || isWon || isCaught || showTutorial) delay(100)
-            gustMultiplier.animateTo(0.2f, tween(260))
-            delay(900)
-            while (isPaused || isWon || isCaught || showTutorial) delay(100)
-            gustMultiplier.animateTo(1f, tween(500))
-        }
-    }
-    // What MazeBoard actually renders with — base radius, permanently
-    // widened by any collected wisps, then multiplied down during a gust.
-    val effectiveVisionRadius = level.visionRadius?.let { base -> (base + wispBonus) * gustMultiplier.value }
 
     fun resetLevel() {
         path.clear()
@@ -366,52 +313,12 @@ fun MazeGameScreen(
         elapsedSeconds = 0
         isCaught = false
         resetTick++
+        if (hasEnemyThreat) SoundManager.resumeBackgroundMusic()
     }
 
     fun tryMove(dir: Direction): Boolean {
         if (isWon || isPaused || isCaught || showTutorial || playerEntrance.value < 0.3f) return false
         val current = path.last()
-
-        if (isIceFloor) {
-            // Frictionless movement: a swipe commits to sliding every open
-            // cell in `dir` — it never stops at a mid-corridor intersection
-            // like the other categories. The slide only ends when the next
-            // cell is a genuine wall (no open passage), or the goal is hit.
-            if (!grid.canMove(current, dir)) {
-                invalidBumpTick++
-                vibrate(HapticFeedbackType.LongPress)
-                return false
-            }
-            var cursor = current
-            var cellsSlid = 0
-            while (grid.canMove(cursor, dir)) {
-                cursor = cursor.step(dir)
-                path.add(cursor)
-                moveCount++
-                cellsSlid++
-                if (cursor == level.goal) break
-            }
-            slideCellCount = cellsSlid
-            vibrate(HapticFeedbackType.TextHandleMove)
-            if (cursor == level.goal) {
-                isWon = true
-                SoundManager.pauseBackgroundMusic()
-                vibrate(HapticFeedbackType.LongPress)
-            } else {
-                // Slid to a stop against a real wall — a short impact wiggle
-                // timed to land right as the glide animation finishes, so it
-                // reads as "hit the wall" rather than a random twitch.
-                val glideMillis = (cellsSlid * ICE_SLIDE_MS_PER_CELL).coerceIn(90, 900)
-                gameScope.launch {
-                    delay(glideMillis.toLong())
-                    shake.snapTo(0f)
-                    shake.animateTo(1f, tween(45))
-                    shake.animateTo(-1f, tween(65))
-                    shake.animateTo(0f, tween(55))
-                }
-            }
-            return true
-        }
 
         if (path.size >= 2 && path[path.size - 2] == current.step(dir)) {
             path.removeAt(path.size - 1)
@@ -476,31 +383,16 @@ fun MazeGameScreen(
         animCol.snapTo(level.start.col.toFloat())
     }
 
-    // Glide the player dot to wherever the path currently ends. Ice Floor
-    // uses a linear, constant-speed glide (no ease-out) so the motion itself
-    // sells "zero friction" — the only deceleration cue is the wall-impact
-    // wiggle in tryMove, not the glide slowing down on its own.
+    // Glide the player dot to wherever the path currently ends.
     LaunchedEffect(level, path.size) {
         val target = path.last()
-        if (isIceFloor) {
-            val distance = kotlin.math.abs(target.row - animRow.value)
-            val durationMillis = (distance * ICE_SLIDE_MS_PER_CELL).toInt().coerceIn(1, 900)
-            animRow.animateTo(target.row.toFloat(), tween(durationMillis, easing = LinearEasing))
-        } else {
-            val spec = spring<Float>(dampingRatio = 0.62f, stiffness = 380f)
-            animRow.animateTo(target.row.toFloat(), spec)
-        }
+        val spec = spring<Float>(dampingRatio = 0.62f, stiffness = 380f)
+        animRow.animateTo(target.row.toFloat(), spec)
     }
     LaunchedEffect(level, path.size) {
         val target = path.last()
-        if (isIceFloor) {
-            val distance = kotlin.math.abs(target.col - animCol.value)
-            val durationMillis = (distance * ICE_SLIDE_MS_PER_CELL).toInt().coerceIn(1, 900)
-            animCol.animateTo(target.col.toFloat(), tween(durationMillis, easing = LinearEasing))
-        } else {
-            val spec = spring<Float>(dampingRatio = 0.62f, stiffness = 380f)
-            animCol.animateTo(target.col.toFloat(), spec)
-        }
+        val spec = spring<Float>(dampingRatio = 0.62f, stiffness = 380f)
+        animCol.animateTo(target.col.toFloat(), spec)
     }
 
     // Wall-bump wiggle.
@@ -552,6 +444,83 @@ fun MazeGameScreen(
             if (!isPaused && !isWon && !isCaught && !showTutorial) elapsedSeconds++
         }
     }
+
+    // Each patrol guard walks its precomputed route back and forth at a
+    // constant per-cell speed, ignoring the player entirely — a "fixed
+    // patrol path", as opposed to a chasing enemy.
+    level.enemies.forEachIndexed { index, enemy ->
+        LaunchedEffect(level, index, resetTick) {
+            val route = enemyPaths.getOrNull(index) ?: return@LaunchedEffect
+            enemyAnimRows[index].snapTo(enemy.from.row.toFloat())
+            enemyAnimCols[index].snapTo(enemy.from.col.toFloat())
+            if (route.size < 2) return@LaunchedEffect
+
+            // Wait for the level-intro wave/bounce to finish before patrolling.
+            while (playerEntrance.value < 1f) delay(16)
+
+            var routeIndex = 0
+            var forward = true
+            while (true) {
+                while (isPaused || isWon || isCaught || showTutorial) delay(80)
+                val prevIndex = routeIndex
+                routeIndex = if (forward) routeIndex + 1 else routeIndex - 1
+                if (routeIndex >= route.size - 1) {
+                    routeIndex = route.size - 1
+                    forward = false
+                } else if (routeIndex <= 0) {
+                    routeIndex = 0
+                    forward = true
+                }
+                val fromCell = route[prevIndex]
+                val target = route[routeIndex]
+                val dir = Direction.values().firstOrNull { fromCell.step(it) == target }
+                if (dir != null) enemyDirections[index] = dir
+                val spec = tween<Float>(enemy.stepMillis, easing = LinearEasing)
+                coroutineScope {
+                    launch { enemyAnimRows[index].animateTo(target.row.toFloat(), spec) }
+                    launch { enemyAnimCols[index].animateTo(target.col.toFloat(), spec) }
+                }
+            }
+        }
+    }
+
+    // Grid/AABB collision: every tick, compare the player's and each guard's
+    // fractional-cell centers as unit-size axis-aligned boxes. Any overlap
+    // on both axes counts as a hit, however the guard reached that cell.
+    LaunchedEffect(level, resetTick) {
+        if (level.enemies.isEmpty()) return@LaunchedEffect
+        // Short invulnerability window right after spawn/reset so a guard
+        // that happens to be near the start cell can't immediately re-catch
+        // the player before everything has visually settled into place.
+        delay(350)
+        while (true) {
+            delay(16)
+            if (isPaused || isWon || isCaught || showTutorial || playerEntrance.value < 1f) continue
+            val hit = level.enemies.indices.any { idx ->
+                val dRow = abs(animRow.value - enemyAnimRows[idx].value)
+                val dCol = abs(animCol.value - enemyAnimCols[idx].value)
+                dRow < 0.62f && dCol < 0.62f
+            }
+            if (hit) {
+                isCaught = true
+                SoundManager.pauseBackgroundMusic()
+                // SoundManager.playWrong already includes its own strong
+                // vibration (gated on the Settings toggle), so the lighter
+                // haptics.performHapticFeedback pulse below is skipped here
+                // to avoid stacking two vibrations on the same catch.
+                SoundManager.playWrong(context)
+                // Once caught, this loop's job is done for this life — stop
+                // polling so it can't flag another hit while the overlay is
+                // showing and resetLevel() is about to cancel/relaunch us.
+                return@LaunchedEffect
+            }
+        }
+    }
+
+    // Caught by a guard — the Game Over overlay takes over from here and
+    // gives the player explicit RETRY / HOME buttons instead of silently
+    // auto-resetting, so they're never caught off guard by a level suddenly
+    // restarting itself.
 
     val stars = if (!isWon) 0 else {
         val safeMoves = moveCount.coerceAtLeast(1)
@@ -642,9 +611,6 @@ fun MazeGameScreen(
             ) {
                 StatChip(icon = Icons.Filled.DirectionsWalk, value = "$moveCount")
                 StatChip(icon = Icons.Filled.Timer, value = formatTime(elapsedSeconds))
-                if (level.wisps.isNotEmpty()) {
-                    StatChip(icon = Icons.Filled.AutoAwesome, value = "${collectedWisps.size}/${level.wisps.size}")
-                }
             }
 
             Box(
@@ -669,13 +635,12 @@ fun MazeGameScreen(
                     maxDistance = maxDistance,
                     gridReveal = gridReveal,
                     playerEntrance = playerEntrance,
+                    enemyAnimRows = enemyAnimRows,
+                    enemyAnimCols = enemyAnimCols,
+                    enemyDirections = enemyDirections,
                     playerColor = playerSkinColor,
+                    enemyColor = enemySkinColor,
                     accentColor = categoryAccent,
-                    iceMode = isIceFloor,
-                    darkMode = isDarkness,
-                    visionRadius = effectiveVisionRadius,
-                    wisps = level.wisps,
-                    collectedWisps = collectedWisps,
                     boardActive = !isPaused && !isWon && !isCaught && !showTutorial,
                     onAttemptMove = { dir -> tryMove(dir) }
                 )
@@ -697,7 +662,10 @@ fun MazeGameScreen(
 
         if (isPaused && !isWon) {
             PauseOverlay(
-                onResume = { isPaused = false },
+                onResume = {
+                    isPaused = false
+                    if (hasEnemyThreat) SoundManager.resumeBackgroundMusic()
+                },
                 onRestart = { showRetryConfirm = true },
                 onHome = { goHome() }
             )
@@ -710,6 +678,7 @@ fun MazeGameScreen(
                 optimalMoves = optimalMoves,
                 elapsedSeconds = elapsedSeconds,
                 hasNextLevel = hasNextLevel,
+                hasEnemies = level.enemies.isNotEmpty(),
                 isNewBest = isNewBest,
                 onHome = { goHome() },
                 onReplay = { resetLevel() },
@@ -729,6 +698,13 @@ fun MazeGameScreen(
                     showRetryConfirm = false
                     resetLevel()
                 }
+            )
+        }
+
+        if (isCaught) {
+            CaughtOverlay(
+                onRetry = { resetLevel() },
+                onHome = { goHome() }
             )
         }
 
@@ -833,7 +809,7 @@ private fun GameTopBar(
         )
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            RoundIconButton(background = AccentTeal, icon = Icons.Filled.Pause, contentDescription = "Pause", playSound = false, onClick = onPause)
+            RoundIconButton(background = AccentGold, icon = Icons.Filled.Pause, contentDescription = "Pause", playSound = false, onClick = onPause)
             RoundIconButton(background = CardLocked, icon = Icons.Filled.Replay, contentDescription = "Restart", contentColor = TextPrimary, playSound = false, onClick = onRestart)
             HintBadge(count = hintsRemaining, enabled = hintsEnabled, onClick = onHint)
         }
@@ -890,13 +866,13 @@ private fun HintBadge(count: Int, enabled: Boolean, onClick: () -> Unit) {
                     .matchParentSize()
                     .graphicsLayer(scaleX = glow, scaleY = glow)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(AccentOrange.copy(alpha = 0.10f))
+                    .background(AccentAmber.copy(alpha = 0.10f))
             )
         }
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
-                .background(if (enabled) AccentOrange.copy(alpha = 0.16f) else CardLocked)
+                .background(if (enabled) AccentAmber.copy(alpha = 0.16f) else CardLocked)
                 .bounceClick(interactionSource, playSound = false)
                 .clickable(
                     enabled = enabled,
@@ -910,12 +886,12 @@ private fun HintBadge(count: Int, enabled: Boolean, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Filled.Lightbulb,
                 contentDescription = "Hint",
-                tint = if (enabled) AccentOrange else TextSecondary,
+                tint = if (enabled) AccentAmber else TextSecondary,
                 modifier = Modifier.size(16.dp)
             )
             Text(
                 text = " $count",
-                color = if (enabled) AccentOrange else TextSecondary,
+                color = if (enabled) AccentAmber else TextSecondary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -939,22 +915,16 @@ private fun MazeBoard(
     maxDistance: Int,
     gridReveal: Animatable<Float, AnimationVector1D>,
     playerEntrance: Animatable<Float, AnimationVector1D>,
-    playerColor: Color = CategoryClassic,
-    accentColor: Color = CategoryClassic,
-    iceMode: Boolean = false,
-    darkMode: Boolean = false,
-    visionRadius: Float? = null,
-    wisps: List<CellPos> = emptyList(),
-    collectedWisps: List<CellPos> = emptyList(),
+    enemyAnimRows: List<Animatable<Float, AnimationVector1D>> = emptyList(),
+    enemyAnimCols: List<Animatable<Float, AnimationVector1D>> = emptyList(),
+    enemyDirections: List<Direction> = emptyList(),
+    playerColor: Color = AccentGold,
+    enemyColor: Color = EnemyColor,
+    accentColor: Color = AccentGold,
     boardActive: Boolean = true,
     onAttemptMove: (Direction) -> Boolean
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-
-    // Darkness fog-of-war: which cells the player's light has ever touched,
-    // so they stay sketched in as a faint memory instead of vanishing the
-    // instant the light moves past — a real mental map, not a pure spotlight.
-    val rememberedSeen = remember(level) { Array(level.rows) { BooleanArray(level.cols) } }
 
     // A slow, continuous pulse used for the goal ring and the hint dot.
     //
@@ -999,27 +969,8 @@ private fun MazeBoard(
     }
     val hintPulse = hintPulseAnim.value
 
-    // Darkness only: the torch's edge breathes unevenly rather than holding
-    // a perfectly still radius, so the safe zone never feels quite the same
-    // size twice — small, but it's what keeps a static spotlight from
-    // reading as a UI mask instead of an actual light source.
-    val torchFlickerAnim = remember(level) { Animatable(0.94f) }
-    LaunchedEffect(level, boardActive, darkMode) {
-        if (!boardActive || !darkMode) return@LaunchedEffect
-        while (true) {
-            torchFlickerAnim.animateTo(1.07f, tween(1450, easing = LinearEasing))
-            torchFlickerAnim.animateTo(0.94f, tween(1450, easing = LinearEasing))
-        }
-    }
-    val torchFlicker = torchFlickerAnim.value
-
-    // Ice Floor gets a real frozen-lake gradient instead of the default
-    // near-black board tint, so the theme reads as "ice" at a glance.
-    val boardBackgroundBrush = if (iceMode) {
-        Brush.verticalGradient(listOf(IceBoardTop, IceBoardBottom))
-    } else {
+    val boardBackgroundBrush =
         Brush.verticalGradient(listOf(BackgroundTop.copy(alpha = 0.4f), BackgroundTop.copy(alpha = 0.4f)))
-    }
 
     Canvas(
         modifier = Modifier
@@ -1031,23 +982,6 @@ private fun MazeBoard(
         val cellSize = size.width / level.cols
         val wallWidth = cellSize * 0.055f
 
-        // Darkness: how lit is the point (r, c) — in fractional cell units —
-        // right now, purely from distance to the player's current position?
-        // 1f at the core of the torch, fading to 0f at its flickering edge.
-        val flickerRadius = (visionRadius ?: 0f) * torchFlicker
-        fun torchLight(r: Float, c: Float): Float {
-            if (!darkMode) return 1f
-            val dr = r - animRow.value
-            val dc = c - animCol.value
-            val dist = kotlin.math.sqrt(dr * dr + dc * dc)
-            val inner = flickerRadius * 0.5f
-            return when {
-                dist <= inner -> 1f
-                dist >= flickerRadius -> 0f
-                else -> 1f - (dist - inner) / (flickerRadius - inner)
-            }
-        }
-
         // Walls — each cell fades/slides in as the reveal wave passes over it, so the
         // corridors look like they're being carved out from the entrance outward.
         val wavefront = gridReveal.value * (maxDistance + 2)
@@ -1057,13 +991,7 @@ private fun MazeBoard(
                 val cell = grid.cellAt(r, c)
                 val rawDist = distanceFromStart[r][c]
                 val cellDist = if (rawDist >= 0) rawDist else (r + c)
-                var cellReveal = ((wavefront - cellDist) / waveBand).coerceIn(0f, 1f)
-                if (darkMode) {
-                    val light = torchLight(r.toFloat(), c.toFloat())
-                    if (light > 0.05f) rememberedSeen[r][c] = true
-                    val memory = if (rememberedSeen[r][c]) 0.16f else 0f
-                    cellReveal *= maxOf(light, memory)
-                }
+                val cellReveal = ((wavefront - cellDist) / waveBand).coerceIn(0f, 1f)
                 if (cellReveal <= 0f) continue
 
                 val x0 = c * cellSize
@@ -1076,7 +1004,7 @@ private fun MazeBoard(
                 val settle = 0.5f + 0.5f * cellReveal
                 val cx = (x0 + x1) / 2f
                 val cy = (y0 + y1) / 2f
-                val wallColor = if (iceMode) IceWallColor.copy(alpha = cellReveal) else TextPrimary.copy(alpha = cellReveal)
+                val wallColor = TextPrimary.copy(alpha = cellReveal)
 
                 if (cell.open[Direction.NORTH] != true) {
                     drawLine(
@@ -1110,30 +1038,11 @@ private fun MazeBoard(
                         wallWidth, StrokeCap.Round
                     )
                 }
-
-                // A light scatter of frost glints on part of the floor —
-                // deterministic per-cell so it doesn't shimmer/flicker frame
-                // to frame, just enough texture to read as an icy surface.
-                if (iceMode && (r * 31 + c * 17) % 4 == 0) {
-                    val sx = x0 + cellSize * (0.28f + 0.44f * ((r * 7 + c * 13) % 5) / 5f)
-                    val sy = y0 + cellSize * (0.28f + 0.44f * ((r * 13 + c * 5) % 5) / 5f)
-                    drawCircle(
-                        color = IceSparkle.copy(alpha = 0.30f * cellReveal),
-                        radius = cellSize * 0.035f,
-                        center = Offset(sx, sy)
-                    )
-                }
             }
         }
 
         // Entrance stub outside the start cell — appears with the very first wave tick
-        var entranceReveal = (wavefront / waveBand).coerceIn(0f, 1f)
-        if (darkMode) {
-            val sr = level.start.row
-            val sc = level.start.col
-            val memory = if (rememberedSeen[sr][sc]) 0.16f else 0f
-            entranceReveal *= maxOf(torchLight(sr.toFloat(), sc.toFloat()), memory)
-        }
+        val entranceReveal = (wavefront / waveBand).coerceIn(0f, 1f)
         val startCenterY = level.start.row * cellSize + cellSize / 2f
         drawLine(
             color = accentColor.copy(alpha = entranceReveal),
@@ -1144,16 +1053,9 @@ private fun MazeBoard(
         )
 
         // Goal marker — soft outer glow + pulsing ring, fades in once the wave reaches it.
-        // In Darkness it doubles as a distant beacon: never fully hidden, just
-        // dim from far away and brightening as the torch gets close, so the
-        // fog adds tension without making the exit feel undiscoverable.
         val goalDist = distanceFromStart[level.goal.row][level.goal.col]
             .takeIf { it >= 0 } ?: maxDistance
-        var goalReveal = ((wavefront - goalDist) / waveBand).coerceIn(0f, 1f)
-        if (darkMode) {
-            val beacon = torchLight(level.goal.row.toFloat(), level.goal.col.toFloat())
-            goalReveal *= 0.3f + 0.7f * beacon
-        }
+        val goalReveal = ((wavefront - goalDist) / waveBand).coerceIn(0f, 1f)
         val goalCenter = Offset(
             level.goal.col * cellSize + cellSize / 2f,
             level.goal.row * cellSize + cellSize / 2f
@@ -1181,30 +1083,26 @@ private fun MazeBoard(
                 val py = goalCenter.y + sin(angle) * dist
                 val alpha = (1f - progress).coerceIn(0f, 1f)
                 val radius = cellSize * 0.07f * (1f - progress * 0.5f)
-                val color = if (i % 2 == 0) accentColor else AccentOrange
+                val color = if (i % 2 == 0) accentColor else AccentAmber
                 drawCircle(color = color.copy(alpha = alpha), radius = radius, center = Offset(px, py))
             }
         }
 
-        // Wisp light pickups — small glowing motes scattered through the
-        // fog on later Darkness levels. Like the goal, they're never fully
-        // hidden (a faint glow always shows through the dark to lure the
-        // player off the straight-line route), and they vanish for good
-        // the instant they're collected.
-        if (darkMode && wisps.isNotEmpty()) {
-            for (wisp in wisps) {
-                if (wisp in collectedWisps) continue
-                val wr = wisp.row.toFloat()
-                val wc = wisp.col.toFloat()
-                val cellDist = distanceFromStart[wisp.row][wisp.col].takeIf { it >= 0 } ?: (wisp.row + wisp.col)
-                var wispReveal = ((wavefront - cellDist) / waveBand).coerceIn(0f, 1f)
-                val glow = torchLight(wr, wc)
-                wispReveal *= 0.22f + 0.78f * glow
-                if (wispReveal <= 0.02f) continue
-                val wx = wc * cellSize + cellSize / 2f
-                val wy = wr * cellSize + cellSize / 2f
-                drawCircle(color = WispGold.copy(alpha = 0.22f * wispReveal), radius = cellSize * 0.34f * goalPulse, center = Offset(wx, wy))
-                drawCircle(color = WispGold.copy(alpha = wispReveal), radius = cellSize * 0.11f * hintPulse, center = Offset(wx, wy))
+        // Enemy patrol guards — classic ghost silhouette with directional eyes.
+        // The heartbeat loop (already playing for the life of any level with
+        // guards) gives an early audio warning before one comes into view.
+        if (playerEntrance.value > 0f) {
+            val baseAlpha = playerEntrance.value.coerceIn(0f, 1f)
+            val bobPx = cellSize * 0.05f * ghostBob
+            for (i in enemyAnimRows.indices) {
+                val er = enemyAnimRows[i].value
+                val ec = enemyAnimCols[i].value
+                val enemyAlpha = baseAlpha
+                if (enemyAlpha <= 0.02f) continue
+                val ex = ec * cellSize + cellSize / 2f
+                val ey = er * cellSize + cellSize / 2f + bobPx
+                val lookDir = enemyDirections.getOrNull(i) ?: Direction.SOUTH
+                drawEnemyGhost(center = Offset(ex, ey), cellSize = cellSize, alpha = enemyAlpha, lookDir = lookDir, bodyColor = enemyColor)
             }
         }
 
@@ -1249,7 +1147,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlayerHero(
     alpha: Float,
     scale: Float,
     bob: Float,
-    bodyColor: Color = CategoryClassic
+    bodyColor: Color = AccentGold
 ) {
     val r = cellSize * 0.30f * scale
     val bodyCenter = center + Offset(0f, -r * 0.06f * bob)
@@ -1324,6 +1222,100 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPlayerHero(
     )
 }
 
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawEnemyGhost(
+    center: Offset,
+    cellSize: Float,
+    alpha: Float,
+    lookDir: Direction,
+    bodyColor: Color = EnemyColor
+) {
+    val r = cellSize * 0.30f
+    val bodyTop = center.y - r * 1.15f
+    val bodyBottom = center.y + r * 0.78f
+
+    // Soft outer glow, a shade wider and hotter than the hero's aura so the
+    // threat reads immediately even before the player spots the shape.
+    drawCircle(
+        color = bodyColor.copy(alpha = 0.26f * alpha),
+        radius = r * 1.85f,
+        center = Offset(center.x, center.y - r * 0.1f)
+    )
+
+    val body = Path().apply {
+        moveTo(center.x - r, bodyBottom)
+        // Three jagged spikes replace the smooth rounded head of a plain
+        // ghost, giving the guard a sharper, more hostile silhouette.
+        val spikeWidth = (r * 2f) / 3f
+        val spikeHeight = r * 0.85f
+        var x = center.x - r
+        lineTo(x, bodyTop + r * 0.35f)
+        repeat(3) {
+            val xMid = x + spikeWidth / 2f
+            val xNext = x + spikeWidth
+            lineTo(xMid, bodyTop - spikeHeight * (if (it == 1) 1f else 0.7f))
+            lineTo(xNext, bodyTop + r * 0.35f)
+            x = xNext
+        }
+        lineTo(center.x + r, bodyBottom)
+        // Three rounded scallops form the wavy "hem" feet, like a classic ghost sprite.
+        val legWidth = (r * 2f) / 3f
+        val footDepth = r * 0.38f
+        var fx = center.x + r
+        repeat(3) {
+            val xMid = fx - legWidth / 2f
+            val xNext = fx - legWidth
+            quadraticBezierTo(xMid, bodyBottom + footDepth, xNext, bodyBottom)
+            fx = xNext
+        }
+        close()
+    }
+
+    drawPath(path = body, color = bodyColor.copy(alpha = 0.92f * alpha))
+    // Subtle top-left highlight for a touch of volume.
+    drawCircle(
+        color = Color.White.copy(alpha = 0.14f * alpha),
+        radius = r * 0.5f,
+        center = Offset(center.x - r * 0.3f, bodyTop + r * 0.5f)
+    )
+
+    // Angled brow shadows above each eye give the face a scowling, alert look.
+    val eyeY = center.y - r * 0.16f
+    val eyeSpacing = r * 0.42f
+    val eyeRadius = r * 0.30f
+    val pupilRadius = r * 0.15f
+    for (side in listOf(-1f, 1f)) {
+        val browCenter = Offset(center.x + side * eyeSpacing, eyeY - eyeRadius * 1.15f)
+        val brow = Path().apply {
+            moveTo(browCenter.x - eyeRadius * 0.9f, browCenter.y + eyeRadius * (if (side < 0) 0.35f else -0.35f))
+            lineTo(browCenter.x + eyeRadius * 0.9f, browCenter.y + eyeRadius * (if (side < 0) -0.35f else 0.35f))
+        }
+        drawPath(
+            path = brow,
+            color = Color(0xFF2B1B3D).copy(alpha = 0.85f * alpha),
+            style = Stroke(width = eyeRadius * 0.28f, cap = StrokeCap.Round)
+        )
+    }
+
+    // Eyes glow a hot ember color instead of a plain dark pupil, and shift
+    // toward the direction the guard is walking.
+    val pupilShiftX = lookDir.colDelta * eyeRadius * 0.45f
+    val pupilShiftY = lookDir.rowDelta * eyeRadius * 0.45f
+    for (side in listOf(-1f, 1f)) {
+        val eyeCenter = Offset(center.x + side * eyeSpacing, eyeY)
+        drawCircle(color = Color.White.copy(alpha = alpha), radius = eyeRadius, center = eyeCenter)
+        drawCircle(
+            color = Color(0xFFFFC24B).copy(alpha = alpha),
+            radius = pupilRadius,
+            center = eyeCenter + Offset(pupilShiftX, pupilShiftY)
+        )
+        drawCircle(
+            color = Color(0xFF2B1B3D).copy(alpha = alpha),
+            radius = pupilRadius * 0.4f,
+            center = eyeCenter + Offset(pupilShiftX, pupilShiftY)
+        )
+    }
+}
+
 /**
  * Draws the "Guiding Light" hint trail: a soft glowing line connecting every
  * revealed cell ahead of the player, fading waypoint dots along it, and a
@@ -1350,7 +1342,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawHintTrail(
     }
     drawPath(
         path = linePath,
-        color = AccentOrange.copy(alpha = 0.30f * fade),
+        color = AccentAmber.copy(alpha = 0.30f * fade),
         style = Stroke(width = dotRadius * 0.9f, cap = StrokeCap.Round, join = StrokeJoin.Round)
     )
 
@@ -1361,7 +1353,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawHintTrail(
         val fraction = i / (points.size - 1f)
         val dotAlpha = (0.85f - fraction * 0.45f) * fade
         drawCircle(
-            color = AccentOrange.copy(alpha = dotAlpha),
+            color = AccentAmber.copy(alpha = dotAlpha),
             radius = dotRadius * (0.55f + 0.15f * pulse),
             center = points[i]
         )
@@ -1380,7 +1372,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawHintTrail(
         from.x + (to.x - from.x) * segFraction,
         from.y + (to.y - from.y) * segFraction
     )
-    drawCircle(color = AccentOrange.copy(alpha = 0.35f * fade), radius = dotRadius * 2.1f, center = sparkCenter)
+    drawCircle(color = AccentAmber.copy(alpha = 0.35f * fade), radius = dotRadius * 2.1f, center = sparkCenter)
     drawCircle(color = Color.White.copy(alpha = 0.9f * fade), radius = dotRadius * 0.85f, center = sparkCenter)
 }
 
@@ -1557,10 +1549,10 @@ private fun GameTutorialOverlay(hintsAvailable: Boolean, onFinish: () -> Unit) {
                             modifier = Modifier
                                 .size(60.dp)
                                 .clip(CircleShape)
-                                .background(AccentTeal.copy(alpha = 0.16f)),
+                                .background(AccentGold.copy(alpha = 0.16f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(imageVector = step.icon, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(30.dp))
+                            Icon(imageVector = step.icon, contentDescription = null, tint = AccentGold, modifier = Modifier.size(30.dp))
                         }
                         Spacer(Modifier.height(14.dp))
                         Text(
@@ -1590,7 +1582,7 @@ private fun GameTutorialOverlay(hintsAvailable: Boolean, onFinish: () -> Unit) {
                             modifier = Modifier
                                 .size(width = if (i == stepIndex) 18.dp else 6.dp, height = 6.dp)
                                 .clip(RoundedCornerShape(3.dp))
-                                .background(if (i == stepIndex) AccentTeal else CardLocked)
+                                .background(if (i == stepIndex) AccentGold else CardLocked)
                         )
                     }
                 }
@@ -1600,7 +1592,7 @@ private fun GameTutorialOverlay(hintsAvailable: Boolean, onFinish: () -> Unit) {
                 val isLastStep = stepIndex == steps.lastIndex
                 OverlayButton(
                     text = if (isLastStep) "LET'S GO" else "NEXT",
-                    background = AccentTeal,
+                    background = AccentGold,
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         if (isLastStep) onFinish() else stepIndex++
@@ -1665,7 +1657,7 @@ private fun PauseOverlay(onResume: () -> Unit, onRestart: () -> Unit, onHome: ()
             ) {
                 Text("PAUSED", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                 Spacer(Modifier.height(20.dp))
-                OverlayButton(text = "RESUME", background = AccentTeal, onClick = onResume)
+                OverlayButton(text = "RESUME", background = AccentGold, onClick = onResume)
                 Spacer(Modifier.height(10.dp))
                 OverlayButton(text = "RESTART", background = CardLocked, textColor = TextPrimary, onClick = onRestart)
                 Spacer(Modifier.height(10.dp))
@@ -1682,6 +1674,7 @@ private fun WinOverlay(
     optimalMoves: Int,
     elapsedSeconds: Int,
     hasNextLevel: Boolean,
+    hasEnemies: Boolean = false,
     isNewBest: Boolean = false,
     onHome: () -> Unit,
     onReplay: () -> Unit,
@@ -1690,7 +1683,7 @@ private fun WinOverlay(
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
-    val titleColor = CategoryClassic
+    val titleColor = if (hasEnemies) EnemyColor else AccentGold
 
     Box(
         modifier = Modifier
@@ -1706,7 +1699,7 @@ private fun WinOverlay(
             ),
         contentAlignment = Alignment.Center
     ) {
-        FloatingSparkles(modifier = Modifier.fillMaxSize(), accent = AccentOrange)
+        FloatingSparkles(modifier = Modifier.fillMaxSize(), accent = if (hasEnemies) EnemyColor else AccentAmber)
 
         AnimatedVisibility(
             visible = visible,
@@ -1724,7 +1717,7 @@ private fun WinOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "LEVEL COMPLETE!",
+                    if (hasEnemies) "GUARDS EVADED!" else "LEVEL COMPLETE!",
                     color = titleColor,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Black,
@@ -1732,7 +1725,12 @@ private fun WinOverlay(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (stars >= 3) "Perfect run — no wasted steps!" else "Great maze-running!",
+                    when {
+                        stars >= 3 && hasEnemies -> "Perfect run — not a single guard laid eyes on you!"
+                        stars >= 3 -> "Perfect run — no wasted steps!"
+                        hasEnemies -> "You made it past every patrol — nice moves!"
+                        else -> "Great maze-running!"
+                    },
                     color = TextSecondary,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center
@@ -1765,9 +1763,9 @@ private fun WinOverlay(
                 Spacer(Modifier.height(22.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     RoundIconButton(background = CardLocked, icon = Icons.Filled.Home, contentDescription = "Home", contentColor = TextPrimary, onClick = onHome)
-                    RoundIconButton(background = AccentTeal, icon = Icons.Filled.Replay, contentDescription = "Replay", size = 54.dp, onClick = onReplay)
+                    RoundIconButton(background = AccentGold, icon = Icons.Filled.Replay, contentDescription = "Replay", size = 54.dp, onClick = onReplay)
                     if (hasNextLevel) {
-                        RoundIconButton(background = AccentOrange, icon = Icons.Filled.ArrowForward, contentDescription = "Next level", onClick = onNext)
+                        RoundIconButton(background = AccentAmber, icon = Icons.Filled.ArrowForward, contentDescription = "Next level", onClick = onNext)
                     } else {
                         RoundIconButton(background = CardLocked, icon = Icons.Filled.Lock, contentDescription = "Locked", contentColor = TextSecondary, onClick = onNextLocked)
                     }
@@ -1802,14 +1800,14 @@ private fun PerfectBadge() {
         modifier = Modifier
             .graphicsLayer(scaleX = scale.value, scaleY = scale.value)
             .clip(RoundedCornerShape(20.dp))
-            .background(AccentOrange.copy(alpha = 0.16f))
+            .background(AccentAmber.copy(alpha = 0.16f))
             .padding(horizontal = 12.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(12.dp).graphicsLayer(alpha = shimmer))
+        Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(12.dp).graphicsLayer(alpha = shimmer))
         Text(
             " PERFECT",
-            color = AccentOrange,
+            color = AccentAmber,
             fontSize = 12.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 1.sp
@@ -1829,14 +1827,14 @@ private fun NewBestBadge() {
         modifier = Modifier
             .graphicsLayer(scaleX = scale.value, scaleY = scale.value)
             .clip(RoundedCornerShape(20.dp))
-            .background(AccentTeal.copy(alpha = 0.16f))
+            .background(AccentGold.copy(alpha = 0.16f))
             .padding(horizontal = 12.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = Icons.Filled.WorkspacePremium, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(13.dp))
+        Icon(imageVector = Icons.Filled.WorkspacePremium, contentDescription = null, tint = AccentGold, modifier = Modifier.size(13.dp))
         Text(
             " NEW BEST",
-            color = AccentTeal,
+            color = AccentGold,
             fontSize = 12.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 1.sp
@@ -1855,7 +1853,7 @@ private fun StarPop(filled: Boolean, delayMillis: Int) {
     Icon(
         imageVector = Icons.Filled.Star,
         contentDescription = null,
-        tint = if (filled) AccentOrange else CardLocked,
+        tint = if (filled) AccentAmber else CardLocked,
         modifier = Modifier
             .size(34.dp)
             .graphicsLayer(scaleX = scale.value, scaleY = scale.value)
@@ -1879,7 +1877,7 @@ private data class SparkleSpec(
 )
 
 @Composable
-private fun FloatingSparkles(modifier: Modifier = Modifier, accent: Color = AccentOrange) {
+private fun FloatingSparkles(modifier: Modifier = Modifier, accent: Color = AccentAmber) {
     val infiniteTransition = rememberInfiniteTransition(label = "sparkle_time")
     val t by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -1940,7 +1938,7 @@ private fun RetryConfirmDialog(onCancel: () -> Unit, onConfirm: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth(0.78f)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(Brush.verticalGradient(listOf(AccentTeal, AccentTeal.copy(alpha = 0.78f))))
+                    .background(Brush.verticalGradient(listOf(AccentGold, AccentGold.copy(alpha = 0.78f))))
                     .clickable(interactionSource = swallowInteraction, indication = null, onClick = {})
                     .padding(vertical = 26.dp, horizontal = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -1955,8 +1953,75 @@ private fun RetryConfirmDialog(onCancel: () -> Unit, onConfirm: () -> Unit) {
                 )
                 Spacer(Modifier.height(22.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-                    RoundIconButton(background = Color.White, icon = Icons.Filled.Close, contentDescription = "Cancel", contentColor = AccentTeal, size = 50.dp, onClick = onCancel)
-                    RoundIconButton(background = Color.White, icon = Icons.Filled.Check, contentDescription = "Confirm", contentColor = AccentTeal, size = 50.dp, onClick = onConfirm)
+                    RoundIconButton(background = Color.White, icon = Icons.Filled.Close, contentDescription = "Cancel", contentColor = AccentGold, size = 50.dp, onClick = onCancel)
+                    RoundIconButton(background = Color.White, icon = Icons.Filled.Check, contentDescription = "Confirm", contentColor = AccentGold, size = 50.dp, onClick = onConfirm)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CaughtOverlay(onRetry: () -> Unit, onHome: () -> Unit) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.68f))
+            // Same pass-through fix — once caught, the board underneath must
+            // be fully inert until RETRY/HOME is tapped.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(180)) + scaleIn(
+                initialScale = 0.8f,
+                animationSpec = spring(dampingRatio = 0.5f, stiffness = 380f)
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.82f)
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(Brush.verticalGradient(listOf(BackgroundBottom, BackgroundTop)))
+                    .padding(26.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.SentimentVeryDissatisfied,
+                    contentDescription = null,
+                    tint = EnemyColor,
+                    modifier = Modifier.size(40.dp)
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "GAME OVER",
+                    color = EnemyColor,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "A guard caught you — give it another shot!",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(22.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OverlayButton(text = "TRY AGAIN", background = EnemyColor, onClick = onRetry)
+                    OverlayButton(text = "HOME", background = CardLocked, textColor = TextPrimary, onClick = onHome)
                 }
             }
         }
@@ -1994,7 +2059,7 @@ private fun LockedLevelNotice(onDismiss: () -> Unit) {
                     .padding(22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("COMING SOON", color = AccentOrange, fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                Text("COMING SOON", color = AccentAmber, fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "The next maze is still being built — check back soon!",

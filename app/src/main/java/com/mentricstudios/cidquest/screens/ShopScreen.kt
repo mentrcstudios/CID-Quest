@@ -60,8 +60,8 @@ import com.mentricstudios.cidquest.ads.BannerAd
 import com.mentricstudios.cidquest.game.Skin
 import com.mentricstudios.cidquest.game.SkinType
 import com.mentricstudios.cidquest.game.SkinsCatalog
-import com.mentricstudios.cidquest.ui.theme.AccentOrange
-import com.mentricstudios.cidquest.ui.theme.AccentTeal
+import com.mentricstudios.cidquest.ui.theme.AccentAmber
+import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.CardLocked
@@ -75,25 +75,26 @@ import kotlinx.coroutines.delay
 /**
  * The Shop — every skin unlocks itself automatically the moment the player's
  * total stars reach its cost. There's no separate "buy" action and stars are
- * never spent; tapping an unlocked skin just equips it for the maze.
+ * never spent; tapping an unlocked skin just equips it for the maze/enemies.
  */
 @Composable
 fun ShopScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? Activity
-    val selectedTab = SkinType.PLAYER
+    var selectedTab by remember { mutableStateOf(SkinType.PLAYER) }
     var totalStars by remember { mutableStateOf(SkinPrefs.totalStars(context)) }
     var watchingAd by remember { mutableStateOf(false) }
     var equippedPlayerId by remember { mutableStateOf(SkinPrefs.selectedSkinId(context, SkinType.PLAYER)) }
+    var equippedEnemyId by remember { mutableStateOf(SkinPrefs.selectedSkinId(context, SkinType.ENEMY)) }
 
-    fun equippedId(type: SkinType) = equippedPlayerId
+    fun equippedId(type: SkinType) = if (type == SkinType.PLAYER) equippedPlayerId else equippedEnemyId
 
     fun handleSkinTap(type: SkinType, skin: Skin) {
         // Nothing to purchase — a skin either has enough stars behind it
         // already (tap equips it) or it doesn't (tap does nothing yet).
         if (!SkinPrefs.isUnlocked(context, type, skin.id)) return
         SkinPrefs.select(context, type, skin.id)
-        equippedPlayerId = skin.id
+        if (type == SkinType.PLAYER) equippedPlayerId = skin.id else equippedEnemyId = skin.id
     }
 
     Box(
@@ -143,15 +144,15 @@ fun ShopScreen(onBack: () -> Unit) {
                     .fillMaxWidth()
                     .padding(top = 16.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(AccentOrange.copy(alpha = 0.14f))
+                    .background(AccentAmber.copy(alpha = 0.14f))
                     .padding(vertical = 12.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(18.dp))
+                Icon(imageVector = Icons.Filled.Star, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(18.dp))
                 Text(
                     text = "  $totalStars STARS EARNED",
-                    color = AccentOrange,
+                    color = AccentAmber,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 0.5.sp
@@ -174,7 +175,7 @@ fun ShopScreen(onBack: () -> Unit) {
                         .fillMaxWidth()
                         .padding(top = 10.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(AccentTeal.copy(alpha = if (watchingAd) 0.10f else 0.18f))
+                        .background(AccentGold.copy(alpha = if (watchingAd) 0.10f else 0.18f))
                         .bounceClick(adInteraction, pressedScale = 0.97f)
                         .clickable(
                             enabled = !watchingAd,
@@ -198,12 +199,30 @@ fun ShopScreen(onBack: () -> Unit) {
                 ) {
                     Text(
                         text = if (watchingAd) "LOADING AD…" else "WATCH AD FOR +15 STARS",
-                        color = AccentTeal,
+                        color = AccentGold,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 0.5.sp
                     )
                 }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                ShopTabButton(
+                    label = "PLAYER SKINS",
+                    selected = selectedTab == SkinType.PLAYER,
+                    modifier = Modifier.weight(1f)
+                ) { selectedTab = SkinType.PLAYER }
+                ShopTabButton(
+                    label = "ENEMY SKINS",
+                    selected = selectedTab == SkinType.ENEMY,
+                    modifier = Modifier.weight(1f)
+                ) { selectedTab = SkinType.ENEMY }
             }
 
             val skins = SkinsCatalog.skinsFor(selectedTab)
@@ -234,12 +253,13 @@ fun ShopScreen(onBack: () -> Unit) {
             ) {
                 itemsIndexed(skins) { index, skin ->
                     val unlocked = totalStars >= skin.cost
-                    val cardKey = skin.id
+                    val isEnemyTab = selectedTab == SkinType.ENEMY
+                    val cardKey = "$isEnemyTab:${skin.id}"
                     SkinCard(
                         skin = skin,
                         unlocked = unlocked,
                         equipped = unlocked && equippedId(selectedTab) == skin.id,
-                        isEnemy = false,
+                        isEnemy = isEnemyTab,
                         index = index,
                         swatchPulse = swatchPulse,
                         alreadyAppeared = cardKey in seenSkinCards,
@@ -251,6 +271,28 @@ fun ShopScreen(onBack: () -> Unit) {
         }
 
         BannerAd(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+    }
+}
+
+@Composable
+private fun ShopTabButton(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) AccentGold.copy(alpha = 0.22f) else CardLocked)
+            .bounceClick(interactionSource)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (selected) AccentGold else TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 0.5.sp
+        )
     }
 }
 
@@ -268,7 +310,7 @@ private fun SkinCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val borderColor = when {
-        equipped -> AccentOrange
+        equipped -> AccentAmber
         unlocked -> skin.color.copy(alpha = 0.5f)
         else -> Color.Transparent
     }
@@ -349,12 +391,12 @@ private fun SkinCard(
         when {
             equipped -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Filled.Check, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(11.dp))
-                    Text(text = " EQUIPPED", color = AccentOrange, fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
+                    Icon(imageVector = Icons.Filled.Check, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(11.dp))
+                    Text(text = " EQUIPPED", color = AccentAmber, fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
                 }
             }
             unlocked -> {
-                Text(text = "EQUIP", color = AccentTeal, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
+                Text(text = "EQUIP", color = AccentGold, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
             }
             else -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -46,8 +46,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mentricstudios.cidquest.ui.theme.AccentOrange
-import com.mentricstudios.cidquest.ui.theme.AccentTeal
+import com.mentricstudios.cidquest.ui.theme.AccentAmber
+import com.mentricstudios.cidquest.ui.theme.AccentGold
 import com.mentricstudios.cidquest.ui.theme.BackgroundBottom
 import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.TextPrimary
@@ -119,7 +119,7 @@ fun LoadingScreen(onFinished: () -> Unit) {
             AnimatedMazeIcon()
 
             Text(
-                text = "CID",
+                text = "CID QUEST",
                 color = TextPrimary,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Black,
@@ -128,7 +128,7 @@ fun LoadingScreen(onFinished: () -> Unit) {
             )
             Text(
                 text = "QUEST",
-                color = AccentTeal,
+                color = AccentGold,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 6.sp
@@ -147,7 +147,7 @@ fun LoadingScreen(onFinished: () -> Unit) {
                         .fillMaxWidth(animatedProgress)
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp))
-                        .background(Brush.horizontalGradient(listOf(AccentTeal, AccentOrange)))
+                        .background(Brush.horizontalGradient(listOf(AccentGold, AccentAmber)))
                 )
             }
 
@@ -189,7 +189,7 @@ private fun AmbientGlow() {
                 onDrawBehind {
                     drawCircle(
                         brush = Brush.radialGradient(
-                            listOf(AccentTeal.copy(alpha = 0.10f * glow), androidx.compose.ui.graphics.Color.Transparent)
+                            listOf(AccentGold.copy(alpha = 0.10f * glow), androidx.compose.ui.graphics.Color.Transparent)
                         )
                     )
                 }
@@ -198,9 +198,8 @@ private fun AmbientGlow() {
 }
 
 /**
- * Animated magnifying-glass icon: a glowing dot travels continuously along
- * the maze path inside the lens, giving the loading screen personality
- * instead of a plain spinner.
+ * Animated maze icon: a glowing dot travels continuously along the maze
+ * path, giving the loading screen personality instead of a plain spinner.
  */
 @Composable
 private fun AnimatedMazeIcon() {
@@ -233,25 +232,32 @@ private fun AnimatedMazeIcon() {
     ) {
         val w = size.width
         val h = size.height
-        val lensCenter = Offset(w * 0.42f, h * 0.40f)
-        val lensRadius = w * 0.32f
         val stroke = Stroke(
-            width = w * 0.05f,
+            width = w * 0.06f,
             cap = StrokeCap.Round,
             join = StrokeJoin.Round
         )
 
         val path = Path().apply {
-            moveTo(lensCenter.x - lensRadius * 0.55f, lensCenter.y - lensRadius * 0.5f)
-            lineTo(lensCenter.x - lensRadius * 0.05f, lensCenter.y - lensRadius * 0.5f)
-            lineTo(lensCenter.x - lensRadius * 0.05f, lensCenter.y - lensRadius * 0.05f)
-            lineTo(lensCenter.x + lensRadius * 0.5f, lensCenter.y - lensRadius * 0.05f)
-            lineTo(lensCenter.x + lensRadius * 0.5f, lensCenter.y + lensRadius * 0.5f)
-            lineTo(lensCenter.x - lensRadius * 0.35f, lensCenter.y + lensRadius * 0.5f)
-            lineTo(lensCenter.x - lensRadius * 0.35f, lensCenter.y + lensRadius * 0.1f)
+            moveTo(w * 0.18f, h * 0.18f)
+            lineTo(w * 0.82f, h * 0.18f)
+            lineTo(w * 0.82f, h * 0.82f)
+            lineTo(w * 0.18f, h * 0.82f)
+            lineTo(w * 0.18f, h * 0.55f)
+            lineTo(w * 0.45f, h * 0.55f)
+            lineTo(w * 0.45f, h * 0.35f)
+            lineTo(w * 0.65f, h * 0.35f)
+            lineTo(w * 0.65f, h * 0.48f)
+            lineTo(w * 0.55f, h * 0.48f)
+            lineTo(w * 0.55f, h * 0.68f)
+            lineTo(w * 0.72f, h * 0.68f)
+            lineTo(w * 0.72f, h * 0.28f)
+            lineTo(w * 0.28f, h * 0.28f)
+            lineTo(w * 0.28f, h * 0.72f)
+            lineTo(w * 0.42f, h * 0.72f)
         }
 
-        drawPath(path = path, color = AccentTeal.copy(alpha = 0.85f), style = stroke)
+        drawPath(path = path, color = AccentGold.copy(alpha = 0.85f), style = stroke)
 
         // Compute the point along the path for the given progress fraction
         val measure = PathMeasure()
@@ -259,40 +265,17 @@ private fun AnimatedMazeIcon() {
         val length = measure.length
         val position = measure.getPosition(length * dotProgress)
 
-        val dotCenter = if (position != Offset.Unspecified) position else Offset(lensCenter.x - lensRadius * 0.55f, lensCenter.y - lensRadius * 0.5f)
+        val dotCenter = if (position != Offset.Unspecified) position else Offset(w * 0.18f, h * 0.18f)
 
         drawCircle(
-            color = AccentOrange,
-            radius = w * 0.05f * pulse,
+            color = AccentAmber,
+            radius = w * 0.06f * pulse,
             center = dotCenter
         )
         drawCircle(
-            color = AccentOrange.copy(alpha = 0.25f),
-            radius = w * 0.09f * pulse,
+            color = AccentAmber.copy(alpha = 0.25f),
+            radius = w * 0.11f * pulse,
             center = dotCenter
-        )
-
-        // Lens rim — the maze path above lives inside it, so the icon reads
-        // as "investigating a maze" rather than a plain maze squiggle.
-        drawCircle(
-            color = TextPrimary,
-            radius = lensRadius,
-            center = lensCenter,
-            style = Stroke(width = w * 0.045f)
-        )
-
-        // Handle, angled down-right off the rim at 45 degrees.
-        val handleStart = Offset(
-            lensCenter.x + lensRadius * 0.7071f,
-            lensCenter.y + lensRadius * 0.7071f
-        )
-        val handleEnd = Offset(w * 0.90f, h * 0.92f)
-        drawLine(
-            color = TextPrimary,
-            start = handleStart,
-            end = handleEnd,
-            strokeWidth = w * 0.08f,
-            cap = StrokeCap.Round
         )
     }
 }

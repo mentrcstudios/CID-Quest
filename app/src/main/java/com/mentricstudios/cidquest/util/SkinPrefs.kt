@@ -6,6 +6,7 @@ import com.mentricstudios.cidquest.game.SkinsCatalog
 
 private const val PREFS_NAME = "cid_quest_skins"
 private const val KEY_SELECTED_PLAYER = "selected_player_skin"
+private const val KEY_SELECTED_ENEMY = "selected_enemy_skin"
 
 /**
  * Skins unlock automatically as the player earns stars — there's no separate
@@ -15,7 +16,7 @@ private const val KEY_SELECTED_PLAYER = "selected_player_skin"
  */
 object SkinPrefs {
 
-    private fun selectedKey(type: SkinType) = KEY_SELECTED_PLAYER
+    private fun selectedKey(type: SkinType) = if (type == SkinType.PLAYER) KEY_SELECTED_PLAYER else KEY_SELECTED_ENEMY
 
     fun selectedSkinId(context: Context, type: SkinType): String {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

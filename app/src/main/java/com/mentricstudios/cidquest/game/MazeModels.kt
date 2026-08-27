@@ -170,6 +170,21 @@ object MazeGenerator {
     }
 }
 
+/**
+ * One patrolling enemy for the "Enemies" category. [from]/[to] are just two
+ * cells in the level's grid — the actual walkable route between them is
+ * derived at runtime via [MazeGenerator.shortestPath], since a perfect maze
+ * has exactly one route between any two cells. That guarantees the patrol
+ * always follows real corridors no matter what the generated layout looks
+ * like, and the enemy simply ping-pongs back and forth along it forever.
+ */
+data class EnemyPatrol(
+    val from: CellPos,
+    val to: CellPos,
+    /** Milliseconds to glide one grid cell — lower is faster/deadlier. */
+    val stepMillis: Int = 420
+)
+
 /** Static definition of one playable level. */
 data class MazeLevel(
     val category: String,
@@ -178,33 +193,7 @@ data class MazeLevel(
     val cols: Int,
     val seed: Long,
     val maxHints: Int = 2,
-    /**
-     * Radius, in fractional cell units, of the player's light for the
-     * Darkness category. Null means "no fog" — every other category draws
-     * the full maze once the reveal wave passes over it. Non-null switches
-     * [com.mentricstudios.cidquest.screens.MazeGameScreen]'s board renderer into
-     * fog-of-war mode: only cells within this radius of the player (or,
-     * more atmospherically, cells the player has *ever* stood near) are
-     * drawn at all.
-     */
-    val visionRadius: Float? = null,
-    /**
-     * Darkness-only: collectible "wisp" pickups scattered through the fog.
-     * Walking over one permanently widens the torch a notch for the rest of
-     * the attempt (see `wispBonus` in [com.mentricstudios.cidquest.screens.MazeGameScreen]),
-     * rewarding a deliberate detour off the shortest path instead of a
-     * blind beeline. Empty on every non-Darkness level and on early
-     * Darkness levels where the fog itself is still the whole lesson.
-     */
-    val wisps: List<CellPos> = emptyList(),
-    /**
-     * Darkness-only: if true, the torch periodically gutters down to a
-     * sliver for about a second before recovering (see `gustMultiplier` in
-     * [com.mentricstudios.cidquest.screens.MazeGameScreen]) — a brief "freeze and
-     * remember the map" beat layered on top of the real-time fog, reserved
-     * for levels where the fog and guards are already second nature.
-     */
-    val hasGusts: Boolean = false
+    val enemies: List<EnemyPatrol> = emptyList()
 ) {
     val start = CellPos(0, 0)
     val goal = CellPos(rows - 1, cols - 1)

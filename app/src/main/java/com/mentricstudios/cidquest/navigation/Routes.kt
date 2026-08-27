@@ -8,7 +8,6 @@ object Routes {
     const val HOME = "home"
     const val SETTINGS = "settings"
     const val SHOP = "shop"
-    const val CATEGORIES = "categories"
     const val LEVELS = "levels/{categoryName}"
     const val GAME = "game/{categoryName}/{levelNumber}"
 
