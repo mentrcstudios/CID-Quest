@@ -43,10 +43,14 @@ economy, no Privacy Policy screen, and the character art is real photos
 instead of the original illustrated spark/ghost sprites.
 
 ## Levels
-`game/MazeLevels.kt` holds the full 50-level catalog. Levels 1-2 are
-hand-tuned intros; 3-50 are procedurally scaled — board size grows, guard
-count climbs from 2 up to 6, and guards get faster as the level number rises
-(capped so it never becomes unfair).
+`game/MazeLevels.kt` holds the full 50-level catalog, all from one formula —
+no hand-tuned special cases (that's what let level 2 drift harder than
+levels 3-8 before). Board size grows, guard count climbs from 1 up to 6
+(1 for levels 1-2, 2 for 3-4, 3 for 5-14, 4 for 15-26, 5 for 27-40, 6 for
+41-50), guards get faster as the level number rises, and escape-route
+density (how many loops the maze's braiding pass adds) is highest for the
+early levels and just after each guard-count jump, settling to the
+standard density once a level's guard count has had a few levels to sink in.
 
 ## Easy things to customize
 - **App name:** `app/src/main/res/values/strings.xml` → `app_name`

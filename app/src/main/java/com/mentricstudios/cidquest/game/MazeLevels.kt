@@ -13,67 +13,43 @@ object MazeLevels {
 
     /**
      * Red patrol-guards walking fixed back-and-forth routes through the
-     * maze; touching one resets the level. Levels 1-2 are hand-tuned
-     * intros; levels 3-50 are procedurally scaled below so the full
-     * 50-level set (matching [ENEMIES_TOTAL_LEVELS]) is always playable.
+     * maze — closing in fast once they spot you — touching one resets the
+     * level. All 50 levels come from one formula below, not hand-tuned
+     * individually: guard count, grid size, guard speed, and how many
+     * escape-route loops the maze gets all scale with [levelNumber]
+     * together. (Levels 1-2 used to be hand-tuned separately from the
+     * curve, which is exactly how level 2 ended up harder than levels
+     * 3-8 — one shared formula can't drift out of sync with itself.)
+     *
+     * Guard count: 1 for levels 1-2, 2 for levels 3-4, 3 for levels 5-14,
+     * 4 for levels 15-26, 5 for levels 27-40, 6 for levels 41-50 — so the
+     * jump to 3 simultaneous guards (previously as early as level 2) now
+     * lands at level 5, with two full guard-count steps of gentle ramp-up
+     * ahead of it instead of a sudden spike right after the tutorial level.
      */
     val ENEMIES: List<MazeLevel> = buildList {
-        add(
-            MazeLevel(
-                category = "Enemies",
-                levelNumber = 1,
-                rows = 9,
-                cols = 6,
-                seed = 50001L,
-                maxHints = 2,
-                enemies = listOf(
-                    EnemyPatrol(from = CellPos(1, 2), to = CellPos(6, 2), stepMillis = 460)
-                )
-            )
-        )
-        // Level 2: bigger grid and three guards on independent patrol
-        // routes — two vertical lanes plus a horizontal one crossing both
-        // of them — so the player has to track three moving threats at
-        // once. The horizontal guard is a touch slower than the other two
-        // to keep a third simultaneous threat fair this early on.
-        add(
-            MazeLevel(
-                category = "Enemies",
-                levelNumber = 2,
-                rows = 10,
-                cols = 6,
-                seed = 50002L,
-                maxHints = 2,
-                // A bit more braided than the default — three simultaneous
-                // guards raises the odds of getting boxed in, so this level
-                // gets a few more alternate routes to compensate.
-                braidChance = 0.24,
-                enemies = listOf(
-                    EnemyPatrol(from = CellPos(1, 1), to = CellPos(8, 1), stepMillis = 420),
-                    EnemyPatrol(from = CellPos(2, 4), to = CellPos(7, 4), stepMillis = 400),
-                    EnemyPatrol(from = CellPos(5, 0), to = CellPos(5, 5), stepMillis = 460)
-                )
-            )
-        )
-
-        // Levels 3-50: grid grows the same way every level or two (capped at
-        // 26x15 so late levels stay readable), guard count climbs from 2 up
-        // to 6, and guards get faster (lower stepMillis, floored at 230ms so
-        // it never becomes unfair) as the level number rises. Guards
-        // alternate between vertical and horizontal patrol lanes and are
-        // spaced evenly across the grid so they never clump together.
-        for (levelNumber in 3..ENEMIES_TOTAL_LEVELS) {
+        for (levelNumber in 1..ENEMIES_TOTAL_LEVELS) {
             val rows = (9 + levelNumber).coerceAtMost(26)
             val cols = (6 + (levelNumber * 6) / 10).coerceAtMost(15)
             val guardCount = when {
-                levelNumber <= 8 -> 2
-                levelNumber <= 16 -> 3
+                levelNumber <= 2 -> 1
+                levelNumber <= 4 -> 2
+                levelNumber <= 14 -> 3
                 levelNumber <= 26 -> 4
-                levelNumber <= 38 -> 5
+                levelNumber <= 40 -> 5
                 else -> 6
             }
             val stepMillis = (460 - levelNumber * 4).coerceAtLeast(230)
-            val maxHints = if (levelNumber <= 6) 2 else 1
+            val maxHints = if (levelNumber <= 8) 2 else 1
+            // Extra-generous escape routes through the early and
+            // just-ramped-up stretches, settling to the standard density
+            // once the player's had a few levels to get used to a guard
+            // count before the next one arrives.
+            val braidChance = when {
+                levelNumber <= 4 -> 0.22
+                levelNumber <= 14 -> 0.20
+                else -> 0.16
+            }
 
             val vSlots = (guardCount + 1) / 2
             val hSlots = guardCount / 2
@@ -96,6 +72,7 @@ object MazeLevels {
                     cols = cols,
                     seed = 50000L + levelNumber,
                     maxHints = maxHints,
+                    braidChance = braidChance,
                     enemies = enemies
                 )
             )
