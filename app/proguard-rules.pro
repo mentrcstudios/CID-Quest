@@ -23,6 +23,15 @@
 -keep class com.google.ads.** { *; }
 -dontwarn com.google.android.gms.ads.**
 
+# play-services-ads references android.media.LoudnessCodecController, which
+# only exists on Android 15 (API 35) — one level above this project's
+# compileSdk 34. The SDK feature-detects it at runtime and handles its
+# absence fine on older devices, but R8 can't verify a class that isn't in
+# the SDK it's compiling against, so it needs to be told that's expected
+# rather than erroring out.
+-dontwarn android.media.LoudnessCodecController
+-dontwarn android.media.LoudnessCodecController$OnLoudnessCodecUpdateListener
+
 # --- Media3 (ExoPlayer) --------------------------------------------------
 # Extractors/decoders are looked up by class name at runtime.
 -keep class androidx.media3.** { *; }

@@ -75,16 +75,16 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Lock
@@ -721,7 +721,7 @@ fun MazeGameScreen(
                     .padding(top = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                StatChip(icon = Icons.Filled.DirectionsWalk, value = "$moveCount")
+                StatChip(icon = Icons.AutoMirrored.Filled.DirectionsWalk, value = "$moveCount")
                 StatChip(icon = Icons.Filled.Timer, value = formatTime(elapsedSeconds))
             }
 
@@ -853,9 +853,9 @@ private fun DPad(modifier: Modifier = Modifier, onMove: (Direction) -> Unit) {
     ) {
         DPadButton(icon = Icons.Filled.KeyboardArrowUp, size = btnSize, onClick = { onMove(Direction.NORTH) })
         Row(verticalAlignment = Alignment.CenterVertically) {
-            DPadButton(icon = Icons.Filled.KeyboardArrowLeft, size = btnSize, onClick = { onMove(Direction.WEST) })
+            DPadButton(icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft, size = btnSize, onClick = { onMove(Direction.WEST) })
             Spacer(Modifier.size(btnSize))
-            DPadButton(icon = Icons.Filled.KeyboardArrowRight, size = btnSize, onClick = { onMove(Direction.EAST) })
+            DPadButton(icon = Icons.AutoMirrored.Filled.KeyboardArrowRight, size = btnSize, onClick = { onMove(Direction.EAST) })
         }
         DPadButton(icon = Icons.Filled.KeyboardArrowDown, size = btnSize, onClick = { onMove(Direction.SOUTH) })
     }
@@ -1642,7 +1642,7 @@ private fun GameTutorialOverlay(hintsAvailable: Boolean, onFinish: () -> Unit) {
         buildList {
             add(
                 TutorialStep(
-                    icon = Icons.Filled.DirectionsWalk,
+                    icon = Icons.AutoMirrored.Filled.DirectionsWalk,
                     title = "Swipe to move",
                     body = "Drag anywhere on the maze — up, down, left or right — to guide your spark through the corridors. No swipe needed? The little arrow pad in the corner taps you through instead."
                 )
@@ -1965,7 +1965,7 @@ private fun WinOverlay(
                     RoundIconButton(background = CardLocked, icon = Icons.Filled.Home, contentDescription = "Home", contentColor = TextPrimary, onClick = onHome)
                     RoundIconButton(background = AccentGold, icon = Icons.Filled.Replay, contentDescription = "Replay", size = 54.dp, onClick = onReplay)
                     if (hasNextLevel) {
-                        RoundIconButton(background = AccentAmber, icon = Icons.Filled.ArrowForward, contentDescription = "Next level", onClick = onNext)
+                        RoundIconButton(background = AccentAmber, icon = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next level", onClick = onNext)
                     } else {
                         RoundIconButton(background = CardLocked, icon = Icons.Filled.Lock, contentDescription = "Locked", contentColor = TextSecondary, onClick = onNextLocked)
                     }
