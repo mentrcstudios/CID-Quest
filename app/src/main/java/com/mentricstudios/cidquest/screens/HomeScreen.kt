@@ -1,6 +1,10 @@
 package com.mentricstudios.cidquest.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -13,10 +17,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
@@ -42,6 +45,7 @@ import com.mentricstudios.cidquest.ui.theme.BackgroundTop
 import com.mentricstudios.cidquest.ui.theme.CardLocked
 import com.mentricstudios.cidquest.ui.theme.TextPrimary
 import com.mentricstudios.cidquest.ui.theme.TextSecondary
+import com.mentricstudios.cidquest.util.CharacterPhoto
 import com.mentricstudios.cidquest.util.SettingsPrefs
 import com.mentricstudios.cidquest.util.SoundManager
 import com.mentricstudios.cidquest.util.bounceClick
@@ -52,14 +56,25 @@ import com.mentricstudios.cidquest.util.bounceClick
  * blocky buttons instead of rounded pill shapes. This is on purpose — a
  * cheap, low-budget look that also renders cheaply (nothing here runs a
  * continuous per-frame animation), so it performs fine on low-end phones.
+ *
+ * No Level Select or Settings screens anymore — Play drops straight into
+ * wherever the player is up to, and the one setting that matters most
+ * (the player's own character photo) lives right here instead of behind
+ * another screen.
  */
 @Composable
-fun HomeScreen(
-    onPlay: () -> Unit,
-    onSettings: () -> Unit = {}
-) {
+fun HomeScreen(onPlay: () -> Unit) {
     val context = LocalContext.current
     var soundEnabled by remember { mutableStateOf(SettingsPrefs.isSoundEnabled(context)) }
+    var hasCustomPhoto by remember { mutableStateOf(CharacterPhoto.hasCustomPhoto(context)) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            hasCustomPhoto = CharacterPhoto.saveFromUri(context, uri)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -83,6 +98,20 @@ fun HomeScreen(
                 modifier = Modifier.padding(top = 28.dp),
                 onClick = onPlay
             )
+
+            CharacterSelectorRow(
+                modifier = Modifier.padding(top = 18.dp),
+                hasCustomPhoto = hasCustomPhoto,
+                onPickPhoto = {
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                onResetPhoto = {
+                    CharacterPhoto.clearCustomPhoto(context)
+                    hasCustomPhoto = false
+                }
+            )
         }
 
         Column(
@@ -95,7 +124,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 20.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.Center
             ) {
                 BottomIcon(
                     icon = if (soundEnabled) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
@@ -106,7 +135,6 @@ fun HomeScreen(
                         if (newValue) SoundManager.playClick(context)
                     }
                 )
-                BottomIcon(Icons.Filled.Settings, onClick = onSettings)
             }
             BannerAd()
 
@@ -144,6 +172,54 @@ private fun PlayButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+    }
+}
+
+/** The character-photo picker, right on Home — no separate Settings screen needed for it. */
+@Composable
+private fun CharacterSelectorRow(
+    modifier: Modifier = Modifier,
+    hasCustomPhoto: Boolean,
+    onPickPhoto: () -> Unit,
+    onResetPhoto: () -> Unit
+) {
+    val pickInteraction = remember { MutableInteractionSource() }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .background(CardLocked)
+                .border(width = 1.dp, color = TextSecondary)
+                .bounceClick(pickInteraction)
+                .clickable(interactionSource = pickInteraction, indication = null, onClick = onPickPhoto)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(imageVector = Icons.Filled.Face, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(16.dp))
+                Text(
+                    text = if (hasCustomPhoto) "CHANGE PHOTO" else "SET YOUR PHOTO",
+                    color = TextPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 6.dp)
+                )
+            }
+        }
+
+        if (hasCustomPhoto) {
+            val resetInteraction = remember { MutableInteractionSource() }
+            Text(
+                text = "RESET",
+                color = TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .padding(start = 10.dp)
+                    .bounceClick(resetInteraction, playSound = false)
+                    .clickable(interactionSource = resetInteraction, indication = null, onClick = onResetPhoto)
+                    .padding(8.dp)
             )
         }
     }

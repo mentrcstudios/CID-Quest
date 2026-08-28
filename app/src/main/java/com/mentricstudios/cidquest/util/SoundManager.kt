@@ -100,7 +100,17 @@ object SoundManager {
     }
 
     /** Plays [soundId] now if it's already decoded; otherwise marks it to
-     * play the instant its load finishes, instead of silently dropping it. */
+     * play the instant its load finishes, instead of silently dropping it.
+     *
+     * Every file in res/raw/ is normalized to a consistent -18dB mean
+     * volume at the source (they used to vary by up to 8dB depending on
+     * which part of which source recording each was cut from, which is why
+     * some sounds used to feel louder/quieter than others for no reason).
+     * The [volume] multipliers below are on top of that shared baseline —
+     * they're deliberate relative balancing (click is frequent so it's
+     * dialed back; the ambient "something's nearby" cue is meant to feel
+     * softer than the real chase/caught moments), not a fix for
+     * inconsistency. */
     private fun playWhenReady(soundId: Int, volume: Float) {
         val pool = soundPool ?: return
         if (soundId in loadedSoundIds) {

@@ -47,6 +47,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -55,6 +57,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -205,8 +208,8 @@ fun MazeGameScreen(
     val grid = remember(level) { level.buildGrid() }
     val optimalMoves = remember(level, grid) { level.optimalMoveCount(grid) }
     val haptics = LocalHapticFeedback.current
-    val vibrationEnabled = remember { SettingsPrefs.isVibrationEnabled(context) }
-    val onScreenControlsEnabled = remember { SettingsPrefs.isOnScreenControlsEnabled(context) }
+    var vibrationEnabled by remember { mutableStateOf(SettingsPrefs.isVibrationEnabled(context)) }
+    var onScreenControlsEnabled by remember { mutableStateOf(SettingsPrefs.isOnScreenControlsEnabled(context)) }
     // No more purchasable skins — the hero/guard tokens always render in
     // these two fixed colors.
     val playerSkinColor = AccentGold
@@ -480,6 +483,14 @@ fun MazeGameScreen(
             if (route.size < 2) return@LaunchedEffect
 
             while (playerEntrance.value < 1f) delay(16)
+            // Guards can't enter CHASE during this window no matter how close
+            // they start to the player's spawn cell — without this, a guard
+            // whose patrol route starts adjacent to the entrance (e.g. level
+            // 2's guard at (1,1) vs. the player's (0,0) spawn) would detect
+            // and beeline the player before they'd had a single frame to
+            // react. This is exactly what "can't move at all, guard catches
+            // me instantly" was.
+            val spawnGraceUntil = System.currentTimeMillis() + 900L
 
             var routeIndex = 0
             var forward = true
@@ -518,10 +529,11 @@ fun MazeGameScreen(
                 val chaseNear = dRow < chaseRadius && dCol < chaseRadius
                 val ambientNear = dRow < ambientRadius && dCol < ambientRadius
                 val now = System.currentTimeMillis()
+                val graceActive = now < spawnGraceUntil
 
                 when (state) {
                     EnemyAiState.PATROL -> {
-                        if (chaseNear) {
+                        if (chaseNear && !graceActive) {
                             state = EnemyAiState.CHASE
                             lastSeenAtMillis = now
                             SoundManager.playChaseStart(context)
@@ -766,7 +778,17 @@ fun MazeGameScreen(
                     if (hasEnemyThreat) SoundManager.resumeBackgroundMusic()
                 },
                 onRestart = { showRetryConfirm = true },
-                onHome = { goHome() }
+                onHome = { goHome() },
+                vibrationEnabled = vibrationEnabled,
+                onToggleVibration = {
+                    vibrationEnabled = !vibrationEnabled
+                    SettingsPrefs.setVibrationEnabled(context, vibrationEnabled)
+                },
+                onScreenControlsEnabled = onScreenControlsEnabled,
+                onToggleOnScreenControls = {
+                    onScreenControlsEnabled = !onScreenControlsEnabled
+                    SettingsPrefs.setOnScreenControlsEnabled(context, onScreenControlsEnabled)
+                }
             )
         }
 
@@ -801,6 +823,7 @@ fun MazeGameScreen(
 
         if (isCaught) {
             CaughtOverlay(
+                playerPhoto = playerPhoto,
                 onRetry = { resetLevel() },
                 onHome = { goHome() }
             )
@@ -1770,10 +1793,15 @@ private fun GameTutorialOverlay(hintsAvailable: Boolean, onFinish: () -> Unit) {
 }
 
 @Composable
-private fun PauseOverlay(onResume: () -> Unit, onRestart: () -> Unit, onHome: () -> Unit) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
-
+private fun PauseOverlay(
+    onResume: () -> Unit,
+    onRestart: () -> Unit,
+    onHome: () -> Unit,
+    vibrationEnabled: Boolean,
+    onToggleVibration: () -> Unit,
+    onScreenControlsEnabled: Boolean,
+    onToggleOnScreenControls: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1789,30 +1817,62 @@ private fun PauseOverlay(onResume: () -> Unit, onRestart: () -> Unit, onHome: ()
             ),
         contentAlignment = Alignment.Center
     ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(220)) + scaleIn(
-                initialScale = 0.82f,
-                animationSpec = spring(dampingRatio = 0.6f, stiffness = 300f)
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .background(BackgroundBottom)
+                .border(width = 2.dp, color = TextSecondary)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.8f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(BackgroundBottom)
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Text("PAUSED", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+            Spacer(Modifier.height(20.dp))
+            OverlayButton(text = "RESUME", background = AccentGold, onClick = onResume)
+            Spacer(Modifier.height(10.dp))
+            OverlayButton(text = "RESTART", background = CardLocked, textColor = TextPrimary, onClick = onRestart)
+            Spacer(Modifier.height(10.dp))
+            OverlayButton(text = "HOME", background = CardLocked, textColor = TextPrimary, onClick = onHome)
+
+            Spacer(Modifier.height(18.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("PAUSED", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-                Spacer(Modifier.height(20.dp))
-                OverlayButton(text = "RESUME", background = AccentGold, onClick = onResume)
-                Spacer(Modifier.height(10.dp))
-                OverlayButton(text = "RESTART", background = CardLocked, textColor = TextPrimary, onClick = onRestart)
-                Spacer(Modifier.height(10.dp))
-                OverlayButton(text = "HOME", background = CardLocked, textColor = TextPrimary, onClick = onHome)
+                PauseToggleButton(
+                    label = "VIBRATION",
+                    enabled = vibrationEnabled,
+                    onClick = onToggleVibration,
+                    modifier = Modifier.weight(1f)
+                )
+                PauseToggleButton(
+                    label = "D-PAD",
+                    enabled = onScreenControlsEnabled,
+                    onClick = onToggleOnScreenControls,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun PauseToggleButton(label: String, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        modifier = modifier
+            .height(40.dp)
+            .background(if (enabled) AccentGold else CardLocked)
+            .border(width = 1.dp, color = TextSecondary)
+            .bounceClick(interactionSource, playSound = false)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "$label ${if (enabled) "ON" else "OFF"}",
+            color = if (enabled) BackgroundTop else TextSecondary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -2063,15 +2123,13 @@ private val CAUGHT_CAPTIONS = listOf(
 )
 
 @Composable
-private fun CaughtOverlay(onRetry: () -> Unit, onHome: () -> Unit) {
-    var visible by remember { mutableStateOf(false) }
+private fun CaughtOverlay(playerPhoto: ImageBitmap?, onRetry: () -> Unit, onHome: () -> Unit) {
     val caption = remember { CAUGHT_CAPTIONS.random() }
-    LaunchedEffect(Unit) { visible = true }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.68f))
+            .background(Color.Black.copy(alpha = 0.75f))
             // Same pass-through fix — once caught, the board underneath must
             // be fully inert until RETRY/HOME is tapped.
             .clickable(
@@ -2081,51 +2139,114 @@ private fun CaughtOverlay(onRetry: () -> Unit, onHome: () -> Unit) {
             ),
         contentAlignment = Alignment.Center
     ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(180)) + scaleIn(
-                initialScale = 0.8f,
-                animationSpec = spring(dampingRatio = 0.5f, stiffness = 380f)
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.82f)
+                .background(BackgroundBottom)
+                .border(width = 2.dp, color = EnemyColor)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            JailBarsStrip(modifier = Modifier
+                .fillMaxWidth()
+                .height(14.dp))
+
+            Spacer(Modifier.height(16.dp))
+            JailedAvatar(photo = playerPhoto, modifier = Modifier.size(120.dp))
+            Spacer(Modifier.height(16.dp))
+
+            Text(
+                "CAUGHT",
+                color = EnemyColor,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                caption,
+                color = TextSecondary,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(22.dp))
             Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.82f)
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(Brush.verticalGradient(listOf(BackgroundBottom, BackgroundTop)))
-                    .padding(26.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Filled.SentimentVeryDissatisfied,
-                    contentDescription = null,
-                    tint = EnemyColor,
-                    modifier = Modifier.size(40.dp)
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "GAME OVER",
-                    color = EnemyColor,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 2.sp
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    caption,
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(22.dp))
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OverlayButton(text = "TRY AGAIN", background = EnemyColor, onClick = onRetry)
-                    OverlayButton(text = "HOME", background = CardLocked, textColor = TextPrimary, onClick = onHome)
-                }
+                OverlayButton(text = "TRY AGAIN", background = EnemyColor, onClick = onRetry)
+                OverlayButton(text = "HOME", background = CardLocked, textColor = TextPrimary, onClick = onHome)
             }
+        }
+    }
+}
+
+/**
+ * The player's own in-game photo, dimmed and crosshatched with a net
+ * pattern, ringed in the guard-danger color — "caught in a net" instead of
+ * a generic sad-face icon. Plain Canvas drawing, no gradients/blur, in
+ * keeping with the rest of the app's flat look.
+ */
+@Composable
+private fun JailedAvatar(photo: ImageBitmap?, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val radius = minOf(size.width, size.height) / 2f
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val diameter = radius * 2f
+
+        if (photo != null) {
+            drawImage(
+                image = photo,
+                dstOffset = IntOffset((center.x - radius).roundToInt(), (center.y - radius).roundToInt()),
+                dstSize = IntSize(diameter.roundToInt(), diameter.roundToInt())
+            )
+        } else {
+            drawCircle(color = CardLocked, radius = radius, center = center)
+        }
+
+        // Dim the photo so it reads as "caught", then crosshatch a net over it.
+        drawCircle(color = Color.Black.copy(alpha = 0.32f), radius = radius, center = center)
+
+        clipPath(Path().apply {
+            addOval(Rect(offset = Offset(center.x - radius, center.y - radius), size = Size(diameter, diameter)))
+        }) {
+            val netColor = Color.White.copy(alpha = 0.9f)
+            val strokeWidth = radius * 0.055f
+            val spacing = radius * 0.5f
+            val span = radius * 1.5f
+            var offset = -span
+            while (offset < span) {
+                drawLine(
+                    color = netColor,
+                    start = Offset(center.x - span, center.y + offset),
+                    end = Offset(center.x + span, center.y + offset - span * 2f),
+                    strokeWidth = strokeWidth
+                )
+                drawLine(
+                    color = netColor,
+                    start = Offset(center.x - span, center.y + offset - span * 2f),
+                    end = Offset(center.x + span, center.y + offset),
+                    strokeWidth = strokeWidth
+                )
+                offset += spacing
+            }
+        }
+
+        drawCircle(color = EnemyColor, radius = radius, center = center, style = Stroke(width = radius * 0.09f))
+    }
+}
+
+/** A plain row of thick jail-bar rectangles — cheap flat shapes, no gradient/shadow. */
+@Composable
+private fun JailBarsStrip(modifier: Modifier = Modifier) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceEvenly) {
+        repeat(9) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(3.dp)
+                    .background(EnemyColor)
+            )
         }
     }
 }

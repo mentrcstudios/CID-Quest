@@ -40,3 +40,12 @@ jobs:
         with:
           name: cid-quest-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Build release APK (minified + shrunk)
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cid-quest-release-apk
+          path: app/build/outputs/apk/release/app-release.apk

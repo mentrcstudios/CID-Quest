@@ -17,7 +17,23 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Debug builds (what CI has been building/uploading) never
+            // shrink code or resources, no matter what — that's an Android
+            // default, not something this project controls, and it's the
+            // biggest reason a debug APK measures much bigger than a real
+            // release would. This release config fixes that:
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // This is a private/personal build, not a Play Store release,
+            // so there's no separate release keystore to manage — reuse
+            // the auto-generated debug key so `assembleRelease` still
+            // produces an APK installable the exact same way as
+            // `assembleDebug` always has been.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

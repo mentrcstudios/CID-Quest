@@ -23,12 +23,11 @@ import com.mentricstudios.cidquest.notifications.NotificationChannels
 import com.mentricstudios.cidquest.notifications.ReminderScheduler
 import com.mentricstudios.cidquest.screens.AgeGateScreen
 import com.mentricstudios.cidquest.screens.HomeScreen
-import com.mentricstudios.cidquest.screens.LevelSelectScreen
 import com.mentricstudios.cidquest.screens.LoadingScreen
 import com.mentricstudios.cidquest.screens.MazeGameScreen
-import com.mentricstudios.cidquest.screens.SettingsScreen
 import com.mentricstudios.cidquest.screens.StudioSplashScreen
 import com.mentricstudios.cidquest.ui.theme.CidQuestTheme
+import com.mentricstudios.cidquest.util.GameProgress
 import com.mentricstudios.cidquest.util.NotificationPrefs
 import com.mentricstudios.cidquest.util.OnboardingPrefs
 
@@ -49,9 +48,10 @@ class MainActivity : ComponentActivity() {
         AdsManager.initialize(this)
         NotificationChannels.createChannels(this)
 
-        // Only prompt for the runtime permission once onboarding (Terms +
-        // Age gate) is already behind the player, and only if they haven't
-        // turned reminders off in Settings.
+        // Only prompt for the runtime permission once onboarding (Age gate)
+        // is already behind the player. There's no Settings screen to turn
+        // reminders off anymore, so this just always tries to schedule them
+        // — NotificationPrefs still defaults to enabled.
         if (OnboardingPrefs.isOnboardingComplete(this) && NotificationPrefs.areRemindersEnabled(this)) {
             ensureNotificationPermissionThenSchedule()
         }
@@ -126,27 +126,14 @@ fun CidQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
         composable(Routes.HOME) {
             HomeScreen(
                 onPlay = {
-                    navController.navigate(Routes.levels("Enemies"))
-                },
-                onSettings = {
-                    navController.navigate(Routes.SETTINGS)
+                    // No level-select screen — Play always drops the player
+                    // straight into wherever they're up to: the first level
+                    // they haven't cleared yet (or the last one, to replay,
+                    // once everything's cleared).
+                    val category = "Enemies"
+                    val nextLevel = GameProgress.nextLevelToPlay(context, category, MazeLevels.ENEMIES_TOTAL_LEVELS)
+                    navController.navigate(Routes.game(category, nextLevel))
                 }
-            )
-        }
-
-        composable(Routes.SETTINGS) {
-            SettingsScreen(onBack = { navController.popBackStack() })
-        }
-
-        composable(Routes.LEVELS) { backStackEntry ->
-            val categoryName = backStackEntry.arguments?.getString("categoryName") ?: "Enemies"
-            LevelSelectScreen(
-                categoryName = categoryName,
-                totalLevels = MazeLevels.ENEMIES_TOTAL_LEVELS,
-                onLevelClick = { levelNumber ->
-                    navController.navigate(Routes.game(categoryName, levelNumber))
-                },
-                onBack = { navController.popBackStack() }
             )
         }
 

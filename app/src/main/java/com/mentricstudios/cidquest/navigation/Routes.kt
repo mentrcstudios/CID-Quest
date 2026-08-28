@@ -5,10 +5,7 @@ object Routes {
     const val LOADING = "loading"
     const val AGE_GATE = "age_gate"
     const val HOME = "home"
-    const val SETTINGS = "settings"
-    const val LEVELS = "levels/{categoryName}"
     const val GAME = "game/{categoryName}/{levelNumber}"
 
-    fun levels(categoryName: String) = "levels/$categoryName"
     fun game(categoryName: String, levelNumber: Int) = "game/$categoryName/$levelNumber"
 }

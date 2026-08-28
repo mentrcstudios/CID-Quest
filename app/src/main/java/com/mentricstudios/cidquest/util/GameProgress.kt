@@ -35,4 +35,17 @@ object GameProgress {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return levels.count { prefs.getBoolean(key(it.category, it.levelNumber), false) }
     }
+
+    /**
+     * Where Play should take the player: the first level in [category] that
+     * hasn't been cleared yet, or [totalLevels] itself (to replay) if every
+     * level up to that point is already cleared. There's no level-select
+     * screen anymore — Play always goes straight into a level.
+     */
+    fun nextLevelToPlay(context: Context, category: String, totalLevels: Int): Int {
+        for (levelNumber in 1..totalLevels) {
+            if (!isCompleted(context, category, levelNumber)) return levelNumber
+        }
+        return totalLevels
+    }
 }

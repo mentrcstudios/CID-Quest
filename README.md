@@ -13,20 +13,24 @@ heads back to its route. Getting caught resets the level. 50 hand-scaled
 levels, growing from a small, guard-light intro board up to a large,
 six-guard finale.
 
-Flow (first launch): `Loading → Confirm Age (18+) → Home (Play) → Level Select → Game`
-Flow (returning user): `Loading → Home (Play) → Level Select → Game`
+Flow (first launch): `Loading → Confirm Age (18+) → Home (Play → straight into a level)`
+Flow (returning user): `Loading → Home (Play → straight into wherever you left off)`
 
 - `MainActivity.kt` — sets up the `NavHost` connecting every screen
 - `navigation/Routes.kt` — route names
-- `screens/LoadingScreen.kt` — splash with animated progress bar
+- `screens/LoadingScreen.kt` — flat splash with a plain progress bar
 - `screens/AgeGateScreen.kt` — simple "Are you 18+?" Yes/No confirmation
-- `screens/HomeScreen.kt` — logo, Play button, bottom icon row (sound, settings)
-- `screens/LevelSelectScreen.kt` — 5-column level grid for all 50 levels
+- `screens/HomeScreen.kt` — logo, Play button, sound toggle, and the
+  character-photo picker (gallery picker lives right here — no separate
+  screen for it). Play always drops you straight into the first level you
+  haven't cleared yet; there's no level-select grid anymore.
 - `screens/MazeGameScreen.kt` — the actual maze gameplay: movement, patrol
   guards (rendered as your own/gallery-picked photo vs. three fixed guard
-  photos), hints ("Guiding Light"), pause/restart, win/caught states — no
-  scoring, a level is simply cleared or not
-- `ui/theme/` — Navy & Gold "detective badge" palette, typography
+  photos) that break off their patrol route to actively chase you once
+  you're spotted and give up after 5 seconds clear, hints ("Guiding
+  Light"), pause menu (with vibration/D-pad toggles), win/caught states —
+  no scoring, a level is simply cleared or not
+- `ui/theme/` — flat Navy & Gold palette, no gradients/glow effects
 - `res/mipmap-*` / `res/drawable-nodpi/img_cid_logo.png` — launcher icon +
   in-app logo mark
 - `res/drawable/enemy_1.png` / `enemy_2.png` / `enemy_3.png` / `player_default.png`
@@ -60,9 +64,15 @@ A ready workflow is included at `.github/workflows/android-build.yml`. Steps:
    push to `main`, or you can trigger it manually via **Run workflow**
    (`workflow_dispatch`).
 3. Once it finishes (green check), open the run → **Artifacts** section at
-   the bottom → download `cid-quest-debug-apk`. That zip contains
-   `app-debug.apk` which you can install on any Android phone (`minSdk 24`,
-   i.e. Android 7.0+) or drag into an emulator.
+   the bottom. Two APKs are built:
+   - `cid-quest-debug-apk` → `app-debug.apk` — unshrunk, larger, matches
+     exactly what you've been testing so far.
+   - `cid-quest-release-apk` → `app-release.apk` — code/resource-shrunk via
+     R8, meaningfully smaller. Signed with the debug key (this isn't a Play
+     Store release, just a smaller build) so it installs the exact same way
+     as the debug one — no separate signing setup needed.
+   Either one installs on any Android phone (`minSdk 24`, i.e. Android
+   7.0+) or drags into an emulator.
 4. No local gradle wrapper jar is bundled in this zip (it's a binary file
    that can't be generated offline) — the workflow generates it itself in CI
    via `gradle wrapper`, so you don't need to worry about it. If you later
