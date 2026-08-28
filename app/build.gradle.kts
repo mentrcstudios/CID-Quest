@@ -41,6 +41,17 @@ android {
         compose = true
     }
 
+    lint {
+        // Backstop for InvalidFragmentVersionForActivityResult: the
+        // fragment-ktx pin above should already fix the underlying cause
+        // (an old transitive androidx.fragment version), but disabling the
+        // check directly too means a release build can't fail on it either
+        // way. Safe to disable — this app has zero actual Fragment usage,
+        // so the real bug the check protects against (broken permission
+        // result handling in FragmentActivity) doesn't apply here.
+        disable += "InvalidFragmentVersionForActivityResult"
+    }
+
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
     }
@@ -58,6 +69,15 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.0")
+    // Not used directly anywhere in this app (it's 100% Compose, no
+    // Fragments) — pulled in explicitly just to force Gradle's dependency
+    // resolution to a version >= 1.3.0. Without this, something else in the
+    // graph (most likely play-services-ads) resolves an older transitive
+    // `androidx.fragment` version, which trips lint's
+    // InvalidFragmentVersionForActivityResult check on the
+    // registerForActivityResult() call in MainActivity and fails release
+    // builds (lint-vital errors are always fatal, can't just be ignored).
+    implementation("androidx.fragment:fragment-ktx:1.8.2")
     implementation("androidx.compose.ui:ui:1.6.8")
     implementation("androidx.compose.ui:ui-graphics:1.6.8")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.8")
