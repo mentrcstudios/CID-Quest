@@ -237,7 +237,10 @@ fun MazeGameScreen(
         // it in the meantime (see SoundManager.playToken for why this
         // matters — it's what fixes the intermittent "no heartbeat" bug).
         val myToken = if (hasEnemyThreat) SoundManager.startBackgroundMusic(context) else null
-        onDispose { SoundManager.stopBackgroundMusic(myToken) }
+        onDispose {
+            SoundManager.stopBackgroundMusic(myToken)
+            SoundManager.stopAllOneShots()
+        }
     }
 
     // Accent used for the goal ring / entrance stub / win particles.
@@ -297,9 +300,10 @@ fun MazeGameScreen(
     val celebration = remember(level) { Animatable(0f) }
 
     // --- Enemies category: fixed-path patrol guards ---------------------
-    // Each guard's actual walkable route is derived once from the grid (a
-    // perfect maze has exactly one route between any two cells), then the
-    // guard ping-pongs back and forth along it forever.
+    // Each guard's actual walkable route is derived once from the grid via
+    // BFS shortest-path, then the guard ping-pongs back and forth along it
+    // forever while on ordinary patrol (see the AI state machine below for
+    // what happens once it spots the player).
     val enemyPaths = remember(level, grid) {
         level.enemies.map { enemy -> MazeGenerator.shortestPath(grid, enemy.from, enemy.to) }
     }
@@ -310,6 +314,16 @@ fun MazeGameScreen(
     val enemyDirections = remember(level) {
         mutableStateListOf(*Array(level.enemies.size) { Direction.SOUTH })
     }
+    // Shared across every guard's coroutine below — deliberately NOT
+    // per-guard state. With several guards on screen, each independently
+    // tracking its own cooldown meant they could each fire the same cue
+    // within moments of one another (2-3 guards near the player = 2-3
+    // overlapping ambient/chase sounds back to back), which is exactly
+    // what "sounds repeat too much" was. One shared clock per cue type
+    // means only one plays at a time, no matter how many guards trigger it.
+    var lastAmbientPlayedAt by remember(level) { mutableStateOf(0L) }
+    var lastChaseStartPlayedAt by remember(level) { mutableStateOf(0L) }
+    var lastEvadedPlayedAt by remember(level) { mutableStateOf(0L) }
     // Bumped every time the level resets so enemy-patrol coroutines restart
     // cleanly from their spawn point instead of continuing mid-stride.
     var resetTick by remember(level) { mutableStateOf(0) }
@@ -329,6 +343,7 @@ fun MazeGameScreen(
         elapsedSeconds = 0
         isCaught = false
         resetTick++
+        SoundManager.stopAllOneShots()
         if (hasEnemyThreat) SoundManager.resumeBackgroundMusic()
     }
 
@@ -500,10 +515,11 @@ fun MazeGameScreen(
             var state = EnemyAiState.PATROL
             var lastSeenAtMillis = 0L
             var wasAmbientNear = false
-            var lastAmbientPlayedAt = 0L
             val chaseRadius = 1.15f
             val ambientRadius = 1.8f
             val ambientCooldownMillis = 1600L
+            val chaseStartCooldownMillis = 800L
+            val evadedCooldownMillis = 800L
             val escapeGraceMillis = 5000L
 
             fun currentGuardCell() = CellPos(
@@ -539,7 +555,10 @@ fun MazeGameScreen(
                         if (chaseNear && !graceActive) {
                             state = EnemyAiState.CHASE
                             lastSeenAtMillis = now
-                            SoundManager.playChaseStart(context)
+                            if (now - lastChaseStartPlayedAt >= chaseStartCooldownMillis) {
+                                SoundManager.playChaseStart(context)
+                                lastChaseStartPlayedAt = now
+                            }
                         } else {
                             if (ambientNear && !wasAmbientNear && now - lastAmbientPlayedAt >= ambientCooldownMillis) {
                                 SoundManager.playSpotted(context)
@@ -563,7 +582,10 @@ fun MazeGameScreen(
                             lastSeenAtMillis = now
                         } else if (now - lastSeenAtMillis >= escapeGraceMillis) {
                             state = EnemyAiState.RETURNING
-                            SoundManager.playEvaded(context)
+                            if (now - lastEvadedPlayedAt >= evadedCooldownMillis) {
+                                SoundManager.playEvaded(context)
+                                lastEvadedPlayedAt = now
+                            }
                             delay(450) // a beat of "huh, where'd they go" before heading back
                         }
                         if (state == EnemyAiState.CHASE) {
@@ -582,7 +604,10 @@ fun MazeGameScreen(
                         if (chaseNear) {
                             state = EnemyAiState.CHASE
                             lastSeenAtMillis = now
-                            SoundManager.playChaseStart(context)
+                            if (now - lastChaseStartPlayedAt >= chaseStartCooldownMillis) {
+                                SoundManager.playChaseStart(context)
+                                lastChaseStartPlayedAt = now
+                            }
                         } else {
                             val guardCell = currentGuardCell()
                             val homeCell = route[routeIndex]

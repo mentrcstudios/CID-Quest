@@ -5,10 +5,11 @@ import kotlin.random.Random
 /**
  * Core maze data structures shared by every game mode.
  *
- * A maze is a perfect grid maze (spanning tree — exactly one route between
- * any two cells, no loops) generated with a seeded recursive-backtracker so
- * the same [seed] always reproduces the exact same, guaranteed-solvable
- * layout for a given level.
+ * A maze starts as a perfect grid maze (spanning tree — exactly one route
+ * between any two cells) generated with a seeded recursive-backtracker,
+ * then gets a "braiding" pass that opens some extra walls to add real
+ * loops — see [MazeGenerator.generate]. Both passes are deterministic given
+ * the same [seed], so a level always reproduces the exact same layout.
  */
 enum class Direction(val rowDelta: Int, val colDelta: Int) {
     NORTH(-1, 0),
@@ -76,8 +77,28 @@ class MazeGrid(val rows: Int, val cols: Int) {
 
 object MazeGenerator {
 
-    /** Recursive-backtracker perfect-maze generation, deterministic given [seed]. */
-    fun generate(rows: Int, cols: Int, seed: Long): MazeGrid {
+    /**
+     * Recursive-backtracker perfect-maze generation, deterministic given
+     * [seed], followed by a "braiding" pass that opens some extra walls to
+     * turn part of that single-path tree into a maze with real loops.
+     *
+     * A pure perfect maze has exactly one route between any two cells —
+     * which means once a chasing guard is between you and anywhere else,
+     * there is *no* way around it, only backward past it. [braidChance] is
+     * the probability, checked once per internal wall, of opening it too
+     * (creating a loop) even though the perfect-maze pass already connected
+     * that pair of cells some other way. That gives real alternate routes
+     * throughout the board — a side passage to duck into, a way to loop
+     * back around — so being spotted is a reason to think fast, not an
+     * automatic dead end.
+     */
+    fun generate(rows: Int, cols: Int, seed: Long, braidChance: Double = 0.16): MazeGrid {
+        val grid = generatePerfectMaze(rows, cols, seed)
+        braid(grid, rows, cols, seed, braidChance)
+        return grid
+    }
+
+    private fun generatePerfectMaze(rows: Int, cols: Int, seed: Long): MazeGrid {
         val grid = MazeGrid(rows, cols)
         val rnd = Random(seed)
         val visited = Array(rows) { BooleanArray(cols) }
@@ -108,6 +129,37 @@ object MazeGenerator {
 
         return grid
     }
+
+    /**
+     * Walks every internal wall exactly once (checking only EAST/SOUTH from
+     * each cell, so each wall between two cells is only ever considered a
+     * single time) and opens a [braidChance] fraction of the ones that
+     * aren't already open, creating loops in what was a pure spanning tree.
+     * Uses its own seeded [Random] — derived from but distinct from the
+     * generation seed — so the same level always braids the exact same way.
+     */
+    private fun braid(grid: MazeGrid, rows: Int, cols: Int, seed: Long, braidChance: Double) {
+        if (braidChance <= 0.0) return
+        val rnd = Random(seed xor 0x5DEECE66DL)
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                val pos = CellPos(r, c)
+                for (dir in BRAID_DIRECTIONS) {
+                    val next = pos.step(dir)
+                    if (!grid.inBounds(next)) continue
+                    if (grid.canMove(pos, dir)) continue
+                    if (rnd.nextDouble() < braidChance) {
+                        grid.openWall(pos, dir)
+                    }
+                }
+            }
+        }
+    }
+
+    // EAST/SOUTH only — walking every cell and only checking these two
+    // directions still reaches every internal wall in the grid exactly
+    // once (the WEST wall of one cell is the EAST wall of its neighbor).
+    private val BRAID_DIRECTIONS = listOf(Direction.EAST, Direction.SOUTH)
 
     /**
      * Breadth-first distance (in cell steps) from [start] to every reachable cell.
@@ -173,10 +225,9 @@ object MazeGenerator {
 /**
  * One patrolling enemy for the "Enemies" category. [from]/[to] are just two
  * cells in the level's grid — the actual walkable route between them is
- * derived at runtime via [MazeGenerator.shortestPath], since a perfect maze
- * has exactly one route between any two cells. That guarantees the patrol
- * always follows real corridors no matter what the generated layout looks
- * like, and the enemy simply ping-pongs back and forth along it forever.
+ * derived at runtime via [MazeGenerator.shortestPath] (BFS, so it's still
+ * correct even with the braided maze's loops), and the enemy simply
+ * ping-pongs back and forth along whatever route that finds forever.
  */
 data class EnemyPatrol(
     val from: CellPos,

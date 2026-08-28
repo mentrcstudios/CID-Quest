@@ -44,6 +44,7 @@ object SoundManager {
 
     private val loadedSoundIds = mutableSetOf<Int>()
     private val pendingPlays = mutableSetOf<Int>()
+    private val activeStreamIds = mutableListOf<Int>()
 
     private var bgPlayer: MediaPlayer? = null
 
@@ -82,7 +83,8 @@ object SoundManager {
             if (status == 0) {
                 loadedSoundIds.add(sampleId)
                 if (pendingPlays.remove(sampleId)) {
-                    sp.play(sampleId, 1f, 1f, 1, 0, 1f)
+                    val streamId = sp.play(sampleId, 1f, 1f, 1, 0, 1f)
+                    activeStreamIds.add(streamId)
                 }
             }
         }
@@ -106,24 +108,41 @@ object SoundManager {
      * volume at the source (they used to vary by up to 8dB depending on
      * which part of which source recording each was cut from, which is why
      * some sounds used to feel louder/quieter than others for no reason).
-     * The [volume] multipliers below are on top of that shared baseline —
-     * they're deliberate relative balancing (click is frequent so it's
-     * dialed back; the ambient "something's nearby" cue is meant to feel
-     * softer than the real chase/caught moments), not a fix for
-     * inconsistency. */
+     * Every call site below now also plays at the same [volume] (1f) —
+     * this used to vary per-sound (click quieter since frequent, ambient
+     * softer than the real chase/caught moments) as deliberate relative
+     * balancing, but that read as inconsistent volume rather than
+     * intentional, so it's gone: every sound is the same volume now. */
     private fun playWhenReady(soundId: Int, volume: Float) {
         val pool = soundPool ?: return
         if (soundId in loadedSoundIds) {
-            pool.play(soundId, volume, volume, 1, 0, 1f)
+            val streamId = pool.play(soundId, volume, volume, 1, 0, 1f)
+            activeStreamIds.add(streamId)
         } else {
             pendingPlays.add(soundId)
         }
     }
 
+    /**
+     * Immediately silences every one-shot SFX currently mid-playback.
+     * Call this on any hard scene transition (leaving a level for any
+     * reason — home, next level, retry). Without it, a sound triggered
+     * right as the player left a level (e.g. several guards' cues firing
+     * in the same moment) could still be audibly finishing its ~1-2s clip
+     * into whatever screen comes next, sounding like "the old game's
+     * sounds are still playing."
+     */
+    fun stopAllOneShots() {
+        val pool = soundPool ?: return
+        activeStreamIds.forEach { pool.stop(it) }
+        activeStreamIds.clear()
+        pendingPlays.clear()
+    }
+
     fun playClick(context: Context) {
         if (!SettingsPrefs.isSoundEnabled(context)) return
         ensurePool(context)
-        playWhenReady(clickSoundId, 0.6f)
+        playWhenReady(clickSoundId, 1f)
     }
 
     fun playReward(context: Context) {
@@ -158,7 +177,7 @@ object SoundManager {
     fun playSpotted(context: Context) {
         if (!SettingsPrefs.isSoundEnabled(context)) return
         ensurePool(context)
-        playWhenReady(ambientSoundIds[kotlin.random.Random.nextInt(ambientSoundIds.size)], 0.85f)
+        playWhenReady(ambientSoundIds[kotlin.random.Random.nextInt(ambientSoundIds.size)], 1f)
     }
 
     /** A guard has actually detected the player and is now actively chasing. */
@@ -172,7 +191,7 @@ object SoundManager {
     fun playEvaded(context: Context) {
         if (!SettingsPrefs.isSoundEnabled(context)) return
         ensurePool(context)
-        playWhenReady(evadedSoundId, 0.9f)
+        playWhenReady(evadedSoundId, 1f)
     }
 
     private var loadingPlayer: MediaPlayer? = null
