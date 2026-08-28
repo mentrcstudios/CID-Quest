@@ -79,18 +79,22 @@ object MazeGenerator {
 
     /**
      * Recursive-backtracker perfect-maze generation, deterministic given
-     * [seed], followed by a "braiding" pass that opens some extra walls to
-     * turn part of that single-path tree into a maze with real loops.
+     * [seed], followed by a "braiding" pass that opens extra walls to turn
+     * that single-path tree into a maze with real loops — and then a
+     * second pass that *guarantees* no cell is left a true dead end (see
+     * [eliminateDeadEnds]).
      *
      * A pure perfect maze has exactly one route between any two cells —
      * which means once a chasing guard is between you and anywhere else,
      * there is *no* way around it, only backward past it. [braidChance] is
      * the probability, checked once per internal wall, of opening it too
      * (creating a loop) even though the perfect-maze pass already connected
-     * that pair of cells some other way. That gives real alternate routes
-     * throughout the board — a side passage to duck into, a way to loop
-     * back around — so being spotted is a reason to think fast, not an
-     * automatic dead end.
+     * that pair of cells some other way — but a random-chance pass alone
+     * can still miss an entire corridor (every wall along it independently
+     * failing its roll), leaving a genuine single-entrance dead end
+     * untouched. The follow-up pass doesn't leave that to chance: every
+     * cell with only one exit gets a second one forced open, so a guard
+     * blocking a dead end's only opening is never actually a trap.
      */
     fun generate(rows: Int, cols: Int, seed: Long, braidChance: Double = 0.16): MazeGrid {
         val grid = generatePerfectMaze(rows, cols, seed)
@@ -151,6 +155,36 @@ object MazeGenerator {
                     if (rnd.nextDouble() < braidChance) {
                         grid.openWall(pos, dir)
                     }
+                }
+            }
+        }
+        eliminateDeadEnds(grid, rows, cols, rnd)
+    }
+
+    /**
+     * The probabilistic pass above can still miss a stretch of maze
+     * entirely — every wall along it is an independent coin flip, so a
+     * whole corridor can fail every single roll and stay a true one-way-in
+     * dead end. That's the actual bug behind "only one path to escape":
+     * a guard blocking a dead end's single opening leaves genuinely no way
+     * out, no matter how many loops exist elsewhere in the level.
+     *
+     * This pass doesn't leave it to chance. It walks every cell and, for
+     * any with only one open side, forces a second one open — so no cell
+     * in any level is ever a true dead end, guaranteed rather than likely.
+     */
+    private fun eliminateDeadEnds(grid: MazeGrid, rows: Int, cols: Int, rnd: Random) {
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                val pos = CellPos(r, c)
+                val openCount = Direction.values().count { grid.canMove(pos, it) }
+                if (openCount > 1) continue
+                val closedDirs = Direction.values().filter { dir ->
+                    val next = pos.step(dir)
+                    grid.inBounds(next) && !grid.canMove(pos, dir)
+                }
+                if (closedDirs.isNotEmpty()) {
+                    grid.openWall(pos, closedDirs[rnd.nextInt(closedDirs.size)])
                 }
             }
         }
