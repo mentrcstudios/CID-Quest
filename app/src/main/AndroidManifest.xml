@@ -19,16 +19,14 @@
 
         <!--
           AdMob App ID — this is DIFFERENT from the ad unit IDs (banner/
-          interstitial/rewarded). It comes from AdMob console > Apps >
+          interstitial/rewarded/native). It comes from AdMob console > Apps >
           [your app] > App settings > App ID, and looks like
           "ca-app-pub-9019700052213764~XXXXXXXXXX" (note the ~ tilde, not /).
-          The value below is Google's official TEST App ID so the project
-          builds and shows test ads out of the box — swap it for your real
-          App ID before release or AdMob will reject/limit the build.
+          This is the real Cid Quest App ID.
         -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-9019700052213764~7260467901" />
 
         <activity
             android:name=".MainActivity"

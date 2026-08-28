@@ -329,6 +329,21 @@ fun MazeGameScreen(
     var resetTick by remember(level) { mutableStateOf(0) }
     var isCaught by remember(level) { mutableStateOf(false) }
 
+    // A guard's coroutine getting cancelled (resetTick changing) and a
+    // synchronous SoundManager.play___() call it was already mid-way
+    // through executing can race — cooperative cancellation only takes
+    // effect at the next suspension point, so a stray sound can occasionally
+    // slip out in that same instant even though stopAllOneShots() below
+    // already ran. This sweep fires shortly after every reset and silences
+    // anything that snuck through — the actual fix for "old sound effects
+    // still there after restart."
+    LaunchedEffect(resetTick) {
+        if (resetTick > 0) {
+            delay(120)
+            SoundManager.stopAllOneShots()
+        }
+    }
+
     fun resetLevel() {
         path.clear()
         path.add(level.start)

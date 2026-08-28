@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +68,11 @@ fun HomeScreen(onPlay: () -> Unit) {
     val context = LocalContext.current
     var soundEnabled by remember { mutableStateOf(SettingsPrefs.isSoundEnabled(context)) }
     var hasCustomPhoto by remember { mutableStateOf(CharacterPhoto.hasCustomPhoto(context)) }
+
+    // Home should never have any game audio playing under it, no matter
+    // how the player got here (caught, won, backed out mid-level) — this
+    // is the final defensive layer against leftover sound.
+    LaunchedEffect(Unit) { SoundManager.stopEverything() }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()

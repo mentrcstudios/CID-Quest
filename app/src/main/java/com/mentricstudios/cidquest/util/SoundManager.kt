@@ -209,6 +209,24 @@ object SoundManager {
         loadingPlayer?.start()
     }
 
+    /**
+     * Silences absolutely everything this manager can produce — the
+     * looping background track, every in-flight one-shot SFX, and the
+     * loading jingle if it's still playing. This is the "guaranteed clean
+     * slate" call: use it at any point where audio from whatever just
+     * happened must not carry into whatever's next, when a narrower,
+     * more targeted stop isn't reliably catching every case.
+     */
+    fun stopEverything() {
+        stopBackgroundMusicInternal()
+        stopAllOneShots()
+        loadingPlayer?.let {
+            if (it.isPlaying) it.stop()
+            it.release()
+        }
+        loadingPlayer = null
+    }
+
     private fun strongVibrate(context: Context) {
         val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager

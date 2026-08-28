@@ -92,10 +92,11 @@ A ready workflow is included at `.github/workflows/android-build.yml`. Steps:
 - **App ID:** currently `com.mentricstudios.cidquest` (set in
   `app/build.gradle.kts`) — pick your own if this is already taken on the
   store you're publishing to.
-- **AdMob App ID:** `AndroidManifest.xml` currently ships Google's public
-  *test* App ID so the project builds and shows test ads out of the box.
-  Swap it for your real AdMob App ID (and the real ad unit IDs in
-  `ads/AdIds.kt`) before release, or ads will stay in test mode.
+- **AdMob:** `AndroidManifest.xml` and `ads/AdIds.kt` now have the real Cid
+  Quest App ID and ad unit IDs for Banner and Interstitial. `NATIVE_ADVANCED`
+  is stored in `AdIds.kt` but not wired to any actual native-ad UI yet — that
+  needs its own custom layout, not just an ID. `REWARDED` is still the
+  original placeholder value; confirm/replace it if it's since changed.
 - **Store review:** an earlier build of this codebase (as a different,
   multi-mode game) was rejected once for looking like an unmodified
   template and once for a blocked package name. This build is a real,

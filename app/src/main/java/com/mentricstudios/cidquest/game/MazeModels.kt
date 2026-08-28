@@ -244,12 +244,14 @@ data class MazeLevel(
     val cols: Int,
     val seed: Long,
     val maxHints: Int = 2,
-    val enemies: List<EnemyPatrol> = emptyList()
+    val enemies: List<EnemyPatrol> = emptyList(),
+    /** Extra-connection density for [MazeGenerator.generate]'s braiding pass — higher means more alternate routes/escape options. */
+    val braidChance: Double = 0.16
 ) {
     val start = CellPos(0, 0)
     val goal = CellPos(rows - 1, cols - 1)
 
-    fun buildGrid(): MazeGrid = MazeGenerator.generate(rows, cols, seed)
+    fun buildGrid(): MazeGrid = MazeGenerator.generate(rows, cols, seed, braidChance)
 
     /**
      * Shortest-path move count for star scoring. Takes the already-built

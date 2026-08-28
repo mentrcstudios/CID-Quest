@@ -155,7 +155,9 @@ fun CidQuestApp(onOnboardingJustCompleted: () -> Unit = {}) {
                     }
                 },
                 onNextLevel = { nextLevelNumber ->
-                    navController.navigate(Routes.game(categoryName, nextLevelNumber))
+                    navController.navigate(Routes.game(categoryName, nextLevelNumber)) {
+                        popUpTo(Routes.GAME) { inclusive = true }
+                    }
                 }
             )
         }

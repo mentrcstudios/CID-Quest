@@ -31,8 +31,11 @@ object MazeLevels {
                 )
             )
         )
-        // Level 2: bigger grid and a second guard on an independent patrol
-        // route, so the player has to track two moving threats at once.
+        // Level 2: bigger grid and three guards on independent patrol
+        // routes — two vertical lanes plus a horizontal one crossing both
+        // of them — so the player has to track three moving threats at
+        // once. The horizontal guard is a touch slower than the other two
+        // to keep a third simultaneous threat fair this early on.
         add(
             MazeLevel(
                 category = "Enemies",
@@ -41,9 +44,14 @@ object MazeLevels {
                 cols = 6,
                 seed = 50002L,
                 maxHints = 2,
+                // A bit more braided than the default — three simultaneous
+                // guards raises the odds of getting boxed in, so this level
+                // gets a few more alternate routes to compensate.
+                braidChance = 0.24,
                 enemies = listOf(
                     EnemyPatrol(from = CellPos(1, 1), to = CellPos(8, 1), stepMillis = 420),
-                    EnemyPatrol(from = CellPos(2, 4), to = CellPos(7, 4), stepMillis = 400)
+                    EnemyPatrol(from = CellPos(2, 4), to = CellPos(7, 4), stepMillis = 400),
+                    EnemyPatrol(from = CellPos(5, 0), to = CellPos(5, 5), stepMillis = 460)
                 )
             )
         )
